@@ -1,134 +1,60 @@
-# Template — Server-Side Technical Design (ready to fill)
+# Template — Start from the Core Questions
 
-Copy this skeleton as a starting point. It is aligned with the internal 技术方案 template. Delete
-sections that don't apply (and note you deleted them); replace prompts in _italics_ with real content;
-mark decisions needing a human as **【待填写】 / TODO**.
+Use this optional skeleton for a new design. Rename, combine, or remove sections to fit the change;
+expand only where the reviewer needs an independent explanation. An explicit user or project template
+takes precedence. Prompts below guide drafting and should not remain in the delivered document.
 
----
-
-**Project Owner**: _name_ · **Main reviewer**: _name_ · **Co-reviewers**: _names_
-
-**Change log**
-
-| Event | What changed | Who | When |
-|---|---|---|---|
-| Created | Initial draft | | |
+Include owner, review status, and source links when known or required. Keep dates, sign-offs, test results,
+and deployment status factual. Add an unresolved item only when its answer affects the design or readiness.
 
 ---
 
-# 1. Background & Goals
+# 1. Problem and scope
 
-## Background
-_Business + technical context. What problem does this solve? Link the PRD. Written so someone **not on
-this project** can understand the context. Define terms on first use._
+_Explain the current behavior, the problem, the intended outcome, and the scope of this change.
+Use a meaningful measure of success where available; identify a proposed target as such._
 
-## Goals
-### Business goals
-_What outcome, measured how — quantify._
-### Technical goals
-_e.g. P99 800ms → 300ms; +200 QPS; error rate < 0.01%._
+# 2. Proposed solution
 
-# 2. Detailed Design
-_Delete sub-sections that don't apply; write "not applicable because …" where a required one is out of
-scope._
+_One sentence for the solution, followed by its few key decisions and their effects. Include a compact
+main-flow diagram when it lowers reading effort. Explain significant trade-offs and real alternatives._
 
-## 2.0 Key terms
-_Acronyms / codenames the reader needs._
+# 3. How it works
 
-## 2.1 Design options & chosen design
-_Architecture / flow / sequence diagram here._
+_Replace these prompts with sections named after the actual design questions. Follow one representative
+example from input to result. Trace relevant preparation, state changes, updates, failures, and removal
+without requiring every design to have all of these stages._
 
-**Decision: _Option X_** — _why in one line._
+_Introduce the contract or configuration structure before examples. Identify sources of truth and
+ownership; explain confusing concepts together. Keep the exact contract accessible through an annotated
+schema or field reference, and label illustrative or unvalidated payloads._
 
-| Option | Approach | Pros | Cons | Chosen |
-|---|---|---|---|---|
-| A | | | | |
-| B | | | | ✅ |
+_Place correctness, security, compatibility, and resource constraints alongside the behavior they govern.
+Explain what callers observe on failure and what continues working. Link detailed mechanics only when
+needed; do not repeat each constraint in another chapter._
 
-_Refactor only: traffic-diff scope + method (L0 / security-path links require it)._
+# 4. Verification and rollout
 
-## 2.2 Interfaces
-_Communication method + payload (IDL/fields). Signature & param validation; repeated/LIST upper bound;
-authz; idempotency; PR-sensitive naming (bank_card → safe_bank_card)._
+_Explain how to verify the important behavior. Distinguish planned checks from executed results, and
+link actual evidence when available. Address material performance or capacity assumptions here or beside
+the affected decision._
 
-| Interface | In | Out | Notes |
+_Identify the essential monitoring; reuse existing metrics when adequate. Keep this table compact and
+adapt its columns to the change._
+
+| Object | Metric or measurement | Meaning and dimensions | Alert condition |
 |---|---|---|---|
 
-## 2.3 Storage & Cache (required)
-_Selection + comparison; data-entity relationships (ER); L4 fields encrypted at rest; cache data-link
-diagram + consistency + authz; MySQL latency impact._
+_When release work applies, describe the order, observation period or criterion, abort conditions,
+and rollback mechanism. Show the effect on existing requests, versions, or data when relevant.
+Use required project controls with their source; do not invent an FG name or approval status._
 
-## 2.4 MG design (required)
-_Applies? Call path; cross ≤ 2, ≤ 400ms (cap 800ms); no wrong-destination routing; downstream MG
-support + routing strategy. — or "not applicable because …"._
+## Open decisions — only if material
 
-## 2.5 Exception handling (required)
-| Failure point | Trigger | Handling |
-|---|---|---|
+_What remains undecided or unverified, what it affects, and how it will be resolved. Keep this separate
+from the chosen design; omit the section when nothing relevant is open._
 
-_Call out multi-level transactions and strong/weak dependencies._
+# Appendix — only if useful
 
-## 2.6 Sensitive data & handling (required)
-_L4 (UGC/PII)? Encryption/masking; encrypted at rest; not logged._
-
-## 2.7 Security design (required)
-### Business authz
-_New interface / changed interface logic / non-interface logic. Fill authz points if interfaces change._
-### Encryption & security items
-_Sensitive field storage/exposure; key storage (TCC, not in repo); exposed-struct scope; XSS/CSRF;
-abuse & rate limiting; compliance audit; new third-party packages._
-### Security discussion & conclusion
-| Scenario | Conclusion | Notes |
-|---|---|---|
-
-## 2.8 Monitoring (required)
-_Effective metrics that reflect rollout success and expose anomalies (not argos defaults). Name the
-specific metrics + dashboard; add P0&P1 services to the stability dashboard._
-
-## 2.9 Private interop (required)
-_Supported? New dependencies supported? Low-version compatibility when a new downstream isn't deployed._
-
-## 2.10 Capacity planning
-_Per-day increments: MySQL/Abase/Redis/TOS, gateway QPS, TCE resources, new-table DB selection. Flag
-over-threshold items + sign-off owner._
-
-## 2.11 New call-chain traffic assessment (required)
-| Service PSM | Interface | Est. traffic | Rate-limit | Scenario |
-|---|---|---|---|---|
-
-_Aligned with business owner._
-
-## 2.12 Risk control (required)
-_FG kill-switch for L0–L3 / security changes; FG name + strategy; no conflict with product lab switch._
-
-## 2.13 Compatibility with upstream (required)
-_Any incompatible change? Blast radius; upstream notified; upstream changes + schedule; mitigation._
-
-## 2.14 Performance impact (required)
-_Latency delta; MG thresholds if applicable; RPC and in-loop I/O scrutinized._
-
-# 3. Automated test-case design
-_Single tests are the baseline. Attach the test link._
-## 3.1 Core-flow cases
-_query→create→update, covering tenant / role / permission._
-## 3.2 Exception cases
-_KA private deployment, FG states, PSM merge, Pre/Online & cn/va/sg data inconsistency._
-
-# 4. Plan checklist
-_See review-checklist.md._
-
-# 5. Effort & Milestones
-_Milestone breakdown, effort, dates; phase large projects._
-
-# 6. Testing notes
-_QA booked; self-testing done._
-
-# 7. Rollout plan (required)
-_Gray release + rollback. Multi-service dependency order._
-
-# 8. Review records
-## First round
-### Conclusion
-### TODO
-## Second round
-_Re-review if the built solution diverges from the design by > 1 person-day._
+_Link implementation details, extended contract references, verification inventories, policy sources,
+or review records needed by a subset of readers. Omit an appendix that merely repeats the main text._

@@ -1,151 +1,94 @@
-# Section Guide — Server-Side Technical Design
+# Section Guide — Select Concerns, Then Organize the Design
 
-The catalog of sections a server-side design can contain. For each: **what it's for → what a
-reviewer checks → common traps**. Read this before choosing the section set, then include only the
-sections this change actually needs (say when you drop one).
+Use this as an internal coverage guide when choosing or reviewing sections. A concern may be handled
+inside a flow, contract, or rollout explanation; it does not automatically deserve a chapter.
+Follow an explicitly required user or project template. Otherwise omit inapplicable concerns without
+filling the document with “N/A” or explanations of deleted headings.
 
-Guiding rule throughout: **open each section with the conclusion, then support it. Use a table or
-diagram wherever it beats prose.**
+## Build the reading path
 
----
+A useful starting path is **problem and scope → solution overview → how it works → verification and
+rollout**. Name the detailed sections after the actual design questions. Keep a section only if it has
+an independent purpose; place a failure rule beside the step that can fail, then reference it elsewhere.
 
-## Header / Meta
-- **Purpose**: make the review auditable — Owner, main reviewer, co-reviewers, and a change-log table
-  (event / what changed / who / when).
-- **Reviewer checks**: is there an Owner and a reviewer assigned? Is the change log kept up to date so
-  a second-round reviewer can see what moved?
+Before drafting the outline, walk a representative scenario from input to result. Include relevant
+lifecycle transitions, such as creation, update, deletion, or rollback. Confirm the sources of inputs,
+ownership of state, selection rules, and externally observable results. Do not assume a component or
+configuration exists simply because the flow needs one.
 
-## 1. Background & Goals
+## Engineering coverage — apply where relevant
 
-### Background
-- **Purpose**: give the reader the context to understand *what problem this solves*, business and
-  technical. Link the PRD if the work comes from a product requirement.
-- **Reviewer checks**: could someone **not on this project** understand the situation after reading
-  this? Is the pain/current-state stated before the solution?
-- **Traps**: diving straight into implementation detail or internal jargon so cross-team reviewers are
-  lost. Introduce terms where they first appear.
+| Concern | Questions to resolve | When to expand |
+|---|---|---|
+| Background and scope | What happens today, what problem changes, and what outcome demonstrates success? | Explain unfamiliar context; omit project history that does not explain a decision. |
+| Core decisions | What is chosen, why, and what important trade-off is accepted? | Compare real alternatives when their cost, correctness, or compatibility differs materially. |
+| Interfaces and contracts | Who calls what, with which inputs and outputs? What validates, authenticates, authorizes, or deduplicates the request? | New or changed contracts, consumer changes, sensitive data, or non-obvious limits. |
+| Data, configuration, and cache | Where does each value come from, who owns it, and how is it discovered, identified, stored, updated, or removed? | New state, persistence or consistency behavior, dynamic discovery, or migration. |
+| Failures and resource bounds | What fails, what does the caller observe, and what continues serving? What bounds time, size, retries, and concurrency? | Consequential failure paths and dependency behavior; refer back to shared rules. |
+| Security and privacy | What changes in trust, authorization, tenant isolation, data exposure, or outbound access? | A changed security boundary or an applicable organizational requirement. |
+| Compatibility | Which old callers, data, configurations, or versions must keep working? How do they coexist or migrate? | Behavior or contract changes; explain transitions instead of saying “compatible.” |
+| Capacity and performance | What new traffic, storage, I/O, fan-out, or resource pressure does the change create? | Material cost or latency changes; show assumptions and the bottleneck. |
+| Multiple regions and deployment variants | Are routing, locality, cross-region failures, private deployments, or older deployments relevant? | The actual dependency path crosses these boundaries. |
+| Monitoring | What proves the system is available, correct enough for its intended use, and operating within budget? | Use the metric guidance below; expand only the important diagnostic dimensions. |
+| Verification and rollout | How will the critical behavior be checked, enabled, monitored, stopped, and restored? | New behavior or deployment risk; state dependency order and rollback prerequisites. |
 
-### Goals
-- **Purpose**: state what success looks like and how it's measured.
-- **Reviewer checks**: are business and technical goals separated? Are they **quantified** (P99, QPS,
-  error rate, coverage) rather than "improve performance / experience"?
+## Sources of truth and terminology
 
-## 2. Detailed Design
+Explain related concepts together when they can be confused: configuration identity versus publication
+revision, desired state versus usable state, or loading a capability versus selecting it for traffic.
+Show what each controls and how they relate, using a small example if helpful.
 
-> General rule: for a sub-section that doesn't apply, write "not applicable because …" — don't leave a
-> blank the reviewer has to interpret.
+For a field, identify whether it is supplied by the caller, inherited from environment or connection
+context, derived from a key, or explicitly configured. Repeated representations of the same fact need
+an owner and a consistency rule; add a redundant field only when its validation or operational purpose
+justifies the extra state.
 
-### Key terms
-- Define the terms/acronyms/internal codenames needed to read the rest. A cheap, high-value readability
-  aid — over-include rather than let a reviewer stall on an acronym.
+Keep the exact contract accessible. Put a schema or compact contract description before detailed
+examples. Use either annotated fields or a field reference as the primary explanation; examples should
+illustrate behavior rather than duplicate the reference. Identify examples that are incomplete or untested.
 
-### Design options & chosen design
-- **Purpose**: show what the solution looks like and *why this one*.
-- **Reviewer checks**: is there an **architecture/flow/sequence diagram**? At least one **alternative
-  compared** (reasoning / pros / cons)? An **explicit decision** with rationale? For refactors: is
-  **traffic diff** covered (scope + method)? **L0 links and security-path links must have traffic
-  diff.**
-- **Traps**: presenting only the chosen option with no rejected alternatives, so reviewers can't judge
-  whether the trade-off was sound. Lead with the decision, then the reasoning.
+## Monitoring: define metrics and their meaning
 
-### Interfaces
-- **Purpose**: define the contract and its safety for new/changed interfaces.
-- **Reviewer checks**: communication method + payload (IDL / field definition); **signature &
-  parameter validation**; **upper bound on repeated / LIST fields**; interface authz; **idempotency**;
-  sensitive HTTP field naming (e.g. `bank_card` → `safe_bank_card`). Use a table when there are many
-  interfaces (name / in / out / notes).
+Start with the operations whose failure matters. Use counters for requests, completions, and failures,
+histograms for latency, and gauges for meaningful current state. Rates and percentiles should be derived
+from those measurements. Distinguish attempted, completed, and retried work when they have different counts.
 
-### Storage & Cache
-- **Purpose**: how data is stored/cached and kept consistent and safe.
-- **Reviewer checks**: storage selection compared against alternatives; data-entity relationships (ER
-  diagram when several relate); **L4 fields encrypted at rest**; for caches, a **data-link diagram**,
-  **consistency** strategy, and **authz**; MySQL impact on link latency assessed.
+| Monitoring object | Measurements or reused metrics | Interpretation and dimensions | Alert condition |
+|---|---|---|---|
+| An operation or interface | Volume, failures, duration | Define success, failure classes, and the bounded dimensions needed to locate the problem. | Select the actionable availability, error, or latency condition. |
+| A relevant background process or state | Attempts, failures, duration, or readiness | Explain whether failure affects current service or only a pending update. | Persistent failure or loss of required usable state. |
 
-### MG (multi-region) design
-- **Purpose**: correctness and performance across regions.
-- **Reviewer checks**: does it apply? MG call path mapped; degradation bounded (**cross ≤ 2, target
-  ≤ 400ms, hard cap 800ms**); no wrong-destination routing; **downstream MG support & routing strategy
-  confirmed**. If it doesn't apply, say why.
+Adapt these rows; not every design has a background loader. Platform metrics can be reused when they
+cover the required signal. Avoid duplicate instrumentation, but still identify the interface availability,
+latency, and throughput that the design relies on. Give metric names or their definition; identify
+proposed additions and existing sources without claiming planned instrumentation is already deployed.
 
-### Exception handling
-- **Purpose**: how each failure point is handled so nothing is unbounded in production.
-- **Reviewer checks**: a handling strategy per failure point (timeout, failure, consistency);
-  **multi-level transactions and strong/weak dependencies** called out. A "failure point → trigger →
-  handling" table reads well here.
+For layered protocols, distinguish transport success from operation success. For example, a protocol
+error can occur inside HTTP 200. Define the denominator, timeout and cancellation treatment, and caller
+versus service failures when they affect the success or availability measure. Do not sum the same request
+across layers. State how probes or ingress metrics cover no-traffic periods or failures invisible to the
+application when availability requires that coverage.
 
-### Sensitive data & handling
-- **Purpose**: prevent leakage.
-- **Reviewer checks**: does any interface carry sensitive data; encryption/masking; **L4 (UGC, PII)**;
-  encrypted at rest; **no sensitive data landing in logs**.
+Use bounded labels; keep request IDs, raw errors, credentials, and user content out of metric labels.
+Use logs and traces for correlation and detailed diagnostic metadata without recording sensitive payloads.
+Keep test plans and release TODOs outside the monitoring explanation. Set thresholds from a stated target
+or observed baseline rather than inventing a production limit.
 
-### Security design
-Three parts, each gated by "does it apply":
-- **Business authz** — new interfaces / changed interface logic / non-interface logic (scripts, MQ);
-  for interface changes fill the "authz point" items (cross-tenant risk, authz-type functions, security
-  products, logical authz, OAPI generic authz).
-- **Encryption & security items** — sensitive field storage/exposure; key storage (never in the code
-  repo; prefer encrypted TCC); exposed-struct scope validation; XSS/CSRF; black-industry abuse (rate
-  limiting); compliance audit; new third-party packages.
-- **Security discussion & conclusion** — a table of scenario / conclusion / notes.
-- **Reviewer checks**: a per-item "applies? → conclusion" table so the security surface is visible at a
-  glance.
+## Verification, rollout, and organizational requirements
 
-### Monitoring
-- **Purpose**: make the rollout observable and anomalies catchable.
-- **Reviewer checks**: metrics + grafana dashboard; new P0&P1 services added to the stability
-  dashboard; monitoring is **effective** — it reflects whether the rollout meets expectations and
-  exposes anomalies (don't list argos default-injected metrics).
-- **Example**: add a rate limiter → monitor passed vs throttled traffic; add authz → monitor
-  pass/reject/fail QPS.
-- **Trap**: "we added monitoring" without naming the specific metric.
+At design time, identify acceptance scenarios for the core flow and the significant failure, security,
+and compatibility boundaries. Link executed results only when available; distinguish a planned test,
+a local or mocked check, and a production validation.
 
-### 私有互通 (private interop) design
-- Does the change / its new dependencies support private interop; how to stay compatible with
-  lower-version interop requests when a new downstream isn't deployed. Say why if not applicable.
+For changes that need staged release, explain enablement, observation, abort conditions, and rollback.
+Use the applicable control mechanism, such as an existing feature gate, route, or configuration revision;
+name an FG specifically when the verified project policy or design requires it. Show what the control
+actually stops or restores, including existing requests or connections and irreversible data changes.
 
-### Capacity planning
-- Estimate per-day increments to MySQL/Abase/Redis/TOS storage, gateway QPS, new TCE resources, and DB
-  selection/pressure for new tables.
-- **Thresholds needing a sign-off meeting**: MySQL > 10M rows/day, Abase/TOS > 100G/day, Redis
-  persistent > 100M/day, gateway new QPS avg > 500/s, TCE expansion / new cluster.
+Apply organizational requirements using their current source and scope. Region-hop budgets, capacity
+sign-off thresholds, link-level rules, mandatory FG controls, security conclusions, and review procedures
+are not universal constants. Confirm relevant policy and cite it; mark an unresolved requirement only
+when it materially affects this design. Keep measured numbers, estimates, and proposed limits distinct.
 
-### New call-chain traffic assessment
-- For any new call chain, align **QPS and rate-limit config with the business owner**; confirm whether
-  related interfaces already have limits and whether they need adjusting. Present as a table:
-  service PSM / interface / estimated traffic / rate-limit config / scenario.
-
-### Risk control (kill-switch)
-- Changes on **L0–L3 links or security-related changes must have an FG kill-switch** for one-click
-  rollback; describe the FG and its strategy; check whether a product lab switch conflicts with the FG.
-
-### Compatibility with upstream
-- Could this break upstream? If so: blast-radius assessment, upstream notified, upstream changes &
-  schedule, temporary mitigation.
-
-### Performance impact
-- Does it add meaningful cost or affect critical-path latency; MG cases follow the MG thresholds;
-  otherwise estimate added latency (**focus on RPC and I/O, especially I/O inside loops**).
-
-## 3. Automated test-case design
-- **Single tests are the baseline**; keep unit & automated tests in sync with the change; never ship
-  before tests pass; **attach the test link**.
-- Core-flow cases (query→create→update…) covering tenant / role / permission; exception cases (KA
-  private deployment, FG states, PSM merge, Pre/Online and cn/va/sg data inconsistency during rollout).
-
-## 4. Plan checklist
-- Structured pre-review self-check; tick each item (see `review-checklist.md`).
-
-## 5. Effort & Milestones
-- Break down by milestone with effort and rough dates; for large projects, phase it with per-phase
-  goals and dates.
-
-## 6. Testing notes
-- QA resources booked in advance; sufficient self-testing.
-
-## 7. Rollout plan (required)
-- Confirm with PM/FE/client for complex changes — no unplanned rollout; fully specify **gray release
-  and rollback**; when multiple services depend on each other, **state the rollout order**.
-
-## 8. Review records
-- Record first-round (conclusion + TODO) and second-round reviews; **re-review when the built solution
-  diverges from the design by > 1 person-day**, and sync the relevant people.
+Add owner, reviewers, milestones, test links, and review records when known or required for this delivery.
+Do not imply review approval, test completion, capacity sign-off, or rollout readiness through a filled template.

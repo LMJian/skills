@@ -1,51 +1,41 @@
-# Review Checklist — Server-Side Technical Design
+# Review Checklist — Comprehension Before Inventory
 
-Run this before handing off a draft. It's the same lens a reviewer applies, so passing it means fewer
-review round-trips. Also usable standalone to critique an existing draft. For anything that doesn't
-apply, the correct state is "**not applicable because …**", not a blank.
+Use this internally before handing off a draft or substantial revision. Apply relevant checks only.
+A concern can be satisfied inside the main flow; it needs no standalone heading. Do not paste this
+checklist or a sequence of “not applicable” explanations into the document unless requested or required.
 
-## Structure & completeness
-- [ ] Header has Owner / main reviewer / co-reviewers and a change-log table.
-- [ ] Linked the related PRD (if the work comes from a product requirement).
-- [ ] Key terms defined before they're used.
-- [ ] Every mandatory-by-default section has real content or an explicit "not applicable because …":
-      Interfaces, Storage, Exception handling, Security, Monitoring, Risk control (kill-switch),
-      Rollout.
+## Can the reader explain the solution?
 
-## Design quality
-- [ ] Detailed design has an architecture/flow/sequence **diagram**.
-- [ ] At least one **alternative** compared (reasoning / pros / cons) with an **explicit decision**.
-- [ ] Refactor: **traffic diff** covered; L0 / security-path links have traffic diff.
-- [ ] Interfaces: payload/IDL, signature & param validation, repeated/LIST field upper bound,
-      idempotency, PR-sensitive field naming.
-- [ ] Storage: L4 fields encrypted at rest; cache consistency + authz described; MySQL latency impact
-      assessed.
-- [ ] Exception handling covers timeout / failure / consistency; strong-weak dependencies stated.
-- [ ] MG: applies? cross ≤ 2, ≤ 400ms (cap 800ms), downstream MG support confirmed — or "n/a because".
+- [ ] The opening explains the current problem, intended change, outcome, and scope.
+- [ ] A reader can restate the core solution and the important decisions without tracing implementation details.
+- [ ] One concrete example goes from input to result; relevant lifecycle transitions and failure outcomes are clear.
+- [ ] Input sources, state ownership, identity or version selection, and their effects are established where relevant.
+- [ ] Similar concepts are distinguished before use; diagrams and prose agree on responsibility and timing.
+- [ ] Each section answers a distinct question, and its position follows the design's reasoning or execution flow.
 
-## Safety, capacity, risk
-- [ ] Sensitive data: L4 (UGC/PII) identified, encrypted at rest, not logged.
-- [ ] Security: per-item "applies? → conclusion" for authz / encryption / XSS-CSRF / abuse / compliance
-      / third-party packages.
-- [ ] Monitoring is **effective** — reflects rollout success and exposes anomalies; specific metrics
-      named (not just "added monitoring", not argos defaults).
-- [ ] Capacity: storage/QPS/resource increments estimated; over-threshold items have a sign-off owner.
-- [ ] New call-chain traffic aligned with the business owner (QPS + rate-limit config).
-- [ ] Risk control: FG kill-switch present for L0–L3 / security changes, with strategy; no conflict
-      with product lab switch.
-- [ ] Compatibility: upstream breaks assessed, notified, scheduled, with a mitigation.
-- [ ] Performance: latency delta estimated; RPC / in-loop I/O scrutinized.
+## Is the relevant design complete and evidenced?
 
-## Testing & rollout
-- [ ] Core-flow cases + exception cases; **test link attached**.
-- [ ] Rollout plan has **gray release + rollback**; multi-service dependencies have a stated **order**.
+- [ ] The proposed choice and meaningful trade-offs are explained; no alternative was invented just to fill a table.
+- [ ] Changed contracts, state and configuration behavior, compatibility, and consequential failure paths are specified.
+- [ ] Relevant authorization, isolation, sensitive-data, outbound-access, and resource boundaries remain visible.
+- [ ] New traffic, dependencies, storage, or latency costs are assessed when material, with assumptions or evidence.
+- [ ] Numbers distinguish measurements, estimates, and targets; organizational requirements have a source and scope.
+- [ ] Existing behavior, proposed changes, implemented work, and verified results are not conflated.
+- [ ] Open items affect a real decision or readiness claim and identify the missing information or next step.
 
-## Readability (the differentiator)
-- [ ] **Background is understandable by someone not on the project** — no undefined jargon.
-- [ ] **Decisions lead** — conclusion before reasoning; the reader never guesses which option won.
-- [ ] **Diagrams where they help** — flows/architecture/state drawn, not described in prose.
-- [ ] **Layered** — headings/lists/tables; no >5–6 line text blocks without a break.
-- [ ] **Comparisons are tables** (≥3 items, ≥2 dimensions).
-- [ ] **Quantified** — goals, capacity, traffic, performance carry numbers.
-- [ ] **Open questions are visible** as 【待填写】 / TODO, not hidden.
-- [ ] **Scannable** — a reviewer can grasp the main plan from headings + bold sentences in 1–2 minutes.
+## Can the design be observed, verified, and released?
+
+- [ ] Monitoring names the operations and measurements, reused or proposed sources, useful dimensions, and alert conditions.
+- [ ] Success and availability have a clear meaning; transport and business results, retries, and timeouts are distinguished when needed.
+- [ ] Relevant acceptance cases cover the core flow and major failure or compatibility boundaries; executed results are linked only if available.
+- [ ] Where rollout is needed, enablement order, observation, abort conditions, and rollback behavior are explicit.
+- [ ] Required project controls are addressed without assuming every change needs a new FG, region plan, or approval process.
+
+## Is the draft focused and consistent?
+
+- [ ] Essential behavior is in the main text; long implementation inventories do not obscure it.
+- [ ] Every paragraph helps explain the solution, justify a decision, or assess a consequential constraint; remaining repetition is removed.
+- [ ] Tables and diagrams simplify rather than duplicate text, and important labels remain readable in the actual output.
+- [ ] Each definition or field reference has one primary home; annotated schemas and examples do not duplicate a second full reference.
+- [ ] After changes, affected examples, diagrams, cross-references, headings, and obsolete explanations have been reconciled.
+- [ ] The final affected content has been read back; user annotations and unrelated content are preserved.

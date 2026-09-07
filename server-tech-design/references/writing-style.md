@@ -1,89 +1,79 @@
-# Writing Style — Making the Design Actually Readable
+# Writing Style — Make the Main Design Easy to Explain
 
-A technical design is read by tired reviewers, cross-team collaborators, and your future self. The goal
-is that a reviewer catches the plan and the risks **in one read**. These are concrete techniques with
-before/after examples.
+## 1. Start with the answer and the flow
 
-## 1. Lead with the answer
+Open with the problem, the proposed change, and its main effect. Give the reader a path through the
+solution before describing its internals. Within a section, state the behavior or decision first.
+For a significant trade-off, give the reason and the relevant alternative; routine choices need no
+ceremonial option table.
 
-Reviewers scan top-down and stop when they've got the gist. Put the conclusion first, support it after.
+A reader should be able to follow one real example and identify where the important decisions act.
+Use specific verbs and actors: who loads, validates, selects, calls, switches, or rejects what.
 
-**Before**
-> We considered a synchronous write, then a message queue, then a dual-write with reconciliation. The
-> sync write couples the two services… the MQ adds latency… after weighing these we decided to use the
-> dual-write approach with an async reconciliation job.
+## 2. Decide what belongs in the main text
 
-**After**
-> **Decision: dual-write + async reconciliation.** Rationale below (alternatives: sync write, MQ).
-> - Sync write — rejected: couples the two services, a downstream outage blocks us.
-> - MQ — rejected: adds ~50ms and an extra failure mode.
+Keep information that helps a reviewer understand the mechanism, judge a decision, or identify a
+consequential correctness, security, compatibility, or rollout constraint. Put exhaustive field details,
+implementation mechanics, and long verification inventories in a linked reference or appendix when useful.
+Omit material that serves neither purpose; moving everything into an appendix is not required.
 
-## 2. One idea per paragraph; keep paragraphs short
+Example of lowering detail while preserving behavior:
 
-If a paragraph runs past ~5 lines, it's usually two ideas. Split it. A wall of text signals to the
-reviewer "this will be painful" and they skim past the important part.
+**Too much for the opening explanation**
+> 加载任务核对订阅代次和 desiredRevision，编译候选对象并原子替换 active 引用，
+> 旧对象等待引用释放后回收；失败进入 REJECTED 状态。
 
-## 3. Use tables for anything comparative
+**Main text**
+> **新配置检查通过后，再替换运行中的配置。** 新请求使用新配置，正在执行的请求继续
+> 用旧配置完成；更新失败时继续使用旧配置。
 
-Options, interface fields, capacity estimates, traffic/limits — all scan far better as tables than
-prose.
+Keep race-prevention and lifecycle details where implementation review needs them. If one is itself a
+central correctness decision, summarize it in the main text as well. Shortening should preserve the
+conditions and exceptions that change the behavior.
 
-**Option comparison**
+## 3. Explain concepts, sources, and contracts once
 
-| Option | Approach | Pros | Cons | Chosen |
-|---|---|---|---|---|
-| A | Sync write | Simple, strong consistency | Tight coupling, cascading failure | |
-| B | Dual-write + reconcile | Decoupled, resilient | Eventual consistency, extra job | ✅ |
+Introduce terms at first use. When two names look interchangeable, explain their different jobs and
+relationship together. A small example often works better than a growing glossary.
 
-**Interface fields**
+For a configuration or interface, establish structure before examples. Use an annotated schema or a
+field table as its main reference; avoid repeating every field in both. State what comes from the key,
+environment, caller, or configuration. Distinguish comments and illustrative values from a publishable
+payload, and distinguish a proposed contract from an implemented or tested one.
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| user_id | int64 | yes | |
-| safe_bank_card | string | no | encrypted, PR-sensitive naming |
+## 4. Choose a representation that reduces work for the reader
 
-## 4. Draw the flow
+- Use short connected paragraphs for explanations and trade-offs; use a list for actual steps or parallel items.
+- Use tables for concise mappings and comparisons. A paragraph copied into every cell is still a wall of text.
+- Use a focused diagram when it makes a flow or relationship clearer. A compact overview can precede a
+  detailed sequence when both earn their space. Separate preparation from execution, or independent
+  control and request flows, when combining them would imply the wrong timing.
+- Put constraints alongside the steps they govern. A limit that applies throughout a request should not
+  appear as a final step after all processing has finished.
+- Bold the conclusion or consequential rule selectively. Headings and bold sentences should convey the
+  main decisions, but the complete text must still be understandable without formatting.
 
-Any non-trivial flow, call chain, state machine, or architecture is clearer as a diagram. In Feishu, use
-Mermaid/PlantUML code blocks (they render as editable whiteboards); use `lark-whiteboard` for complex
-architecture. Never substitute a screenshot or a generated image.
+Keep labels and vocabulary consistent between diagrams, schemas, examples, and prose. Do not add a
+second diagram that merely repeats an existing one. Follow current document and whiteboard tools for
+rendering, preserve unrelated user annotations, and inspect the actual rendered result.
 
-```mermaid
-sequenceDiagram
-  Client->>Gateway: request
-  Gateway->>ServiceA: validate + authz
-  ServiceA->>Storage: write (L4 encrypted)
-  ServiceA-->>Gateway: ack
-```
+## 5. Show evidence without manufacturing certainty
 
-Keep each diagram focused on one thing — a diagram that shows everything shows nothing.
+Quantify when the number helps a decision. Identify measured results, estimates with assumptions, and
+proposed targets or limits. An unsourced precise number is not stronger evidence than an honest unknown.
+Keep current behavior, planned behavior, and verified behavior distinct at the relevant statement.
 
-## 5. Number options and state the decision
+Open items should state what decision or evidence is missing and its consequence. A design draft can
+contain a planned test without a result link. Do not fill a TODO list with unrelated checks or claim that
+an example has passed validation because it looks complete.
 
-Never make the reader infer which option won. Number them, then write "**We chose Option 2 because…**".
-The rejected options are what reviewers scrutinize — keep them, with the reason for rejection.
+## 6. Revise toward a smaller, consistent explanation
 
-## 6. Bold the load-bearing sentences
+Replace the affected explanation when a decision changes. Then follow dependent terms, field names,
+examples, diagrams, and references. Remove stale details and merge repeated rules. Prefer placing a
+clarification in its owning section over adding another chapter.
 
-A reviewer should be able to read only the **bold** text and still catch: the decision, the main risk,
-the kill-switch, the compatibility break. Don't bold everything — reserve it for the sentences that
-carry the review.
-
-## 7. Quantify
-
-Replace vague claims with numbers wherever you can.
-
-- ✗ "improves performance" → ✓ "P99 800ms → 300ms"
-- ✗ "handles more traffic" → ✓ "+200 QPS on lark.facade.chat, limit 2k"
-- ✗ "some storage growth" → ✓ "~3M MySQL rows/day, ~20G/day TOS"
-
-## 8. Mark unknowns explicitly
-
-Anything that needs a human decision — a real FG name, a capacity sign-off, a security conclusion —
-should be a visible **【待填写】 / TODO**, not silently omitted. A reviewer would rather see an open
-question than a hidden gap.
-
-## 9. Right-size
-
-Delete sections that don't apply (and note you deleted them). Padding every section with "N/A" makes
-the doc longer and *less* likely to be read. A tight, complete doc beats a long, hedged one.
+Do a deletion pass after drafting or a substantial revision: if removing a paragraph does not weaken
+understanding, a decision, or a consequential constraint, shorten it, relocate it, or remove it. Do not
+confuse shorter paragraphs with less information overload. Respect the user's edit scope; update related
+material as needed for consistency without rewriting unaffected sections for style alone.

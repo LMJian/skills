@@ -1,130 +1,92 @@
 ---
 name: server-tech-design
 description: >-
-  Write high-quality, review-ready server-side technical design documents (技术方案 / TDD / RFC).
-  Use this skill whenever the user is drafting, reviewing, structuring, or improving a backend
-  technical design — including phrases like "写技术方案", "服务端技术方案", "technical design doc",
-  "system design", "RFC", "设计评审", "架构方案", "接口设计", "存储设计", "上线方案",
-  or when they share a design template and ask to fill it in or make it more readable. Also use it
-  to critique an existing design draft for completeness (interfaces, storage, security, MG, capacity,
-  monitoring, rollout, risk control) and for readability. Prefer this skill over generic doc writing
-  whenever the topic is a backend/server-side engineering design that will go through review.
+  Draft, review, structure, and improve server-side technical designs (服务端技术方案 / TDD / RFC).
+  Use for backend design decisions, design reviews, and making technical proposals clearer and
+  more focused. Covers the core flow, contracts, relevant risks, monitoring, and rollout without
+  imposing a fixed chapter inventory. Prefer this skill over generic document writing for backend designs.
 ---
 
-# Server-Side Technical Design (服务端技术方案)
+# Server-Side Technical Design
 
-A good server-side technical design document has one job: **let a reviewer who was not in your head
-understand the problem, agree the solution is sound, and spot the risks — in one read.** This skill
-helps produce exactly that: complete on the dimensions that matter for backend systems, and readable
-enough that people actually finish it.
+Help a reviewer understand **what changes, how it works, why the important decisions are sound,
+and how to verify and recover it**. Allocate detail according to the decisions the reader must make.
 
-## When to use this skill
+## Operating principles
 
-- Drafting a new server-side technical design from a PRD, a problem statement, or a rough idea.
-- Filling in a design template (including the internal 技术方案 template) with real content.
-- Reviewing / critiquing an existing design for **completeness** and **readability**.
-- Turning scattered notes, chat threads, or a meeting into a structured design doc.
-
-If the user is designing frontend/client UI, writing a PRD, or doing pure coding, this skill is not the
-right fit — say so and redirect.
-
-## Core principles (the "why" behind everything below)
-
-1. **Reader-first, not author-first.** The author already knows the context; the reader does not.
-   Every section should reduce the reader's uncertainty. If a paragraph doesn't help a reviewer decide
-   or catch a risk, cut it.
-2. **Decisions over descriptions.** A design doc is a record of *decisions and their trade-offs*, not a
-   restatement of the code. For any non-trivial choice, show the alternatives you rejected and *why* —
-   that is what reviewers actually scrutinize.
-3. **Make risk visible.** The most valuable thing a design surfaces is what could go wrong: failure
-   modes, compatibility breaks, capacity limits, security exposure. Hiding these wastes the review;
-   surfacing them is the point.
-4. **Quantify whenever possible.** "Improves performance" is unreviewable; "P99 from 800ms → 300ms,
-   +200 QPS on lark.facade.chat" is. Goals, capacity, and performance impact should carry numbers.
-5. **Right-size the doc.** Not every section applies to every change. Delete sections that don't apply
-   (and say you deleted them) rather than padding them with "N/A" boilerplate. A tight doc gets read.
+- **Establish the core solution before choosing headings.** A polished outline cannot repair an
+  incomplete flow or an unresolved source of configuration, identity, or routing.
+- **Review dimensions are not mandatory chapters.** Check the relevant engineering concerns internally;
+  organize the document around the change. Preserve genuinely required sections in a user-provided template.
+- **Keep consequential constraints visible.** Correctness, security, compatibility, and rollout constraints
+  belong beside the decision or flow they constrain. Move exhaustive implementation detail to a reference
+  or appendix when it would interrupt understanding.
+- **Separate evidence from intent.** Distinguish existing behavior, proposed changes, estimates, and verified
+  results. Do not turn an illustrative number, example configuration, or planned test into a confirmed fact.
+- **Respect the requested operation.** A review or explanation does not automatically call for editing a
+  document, changing code, publishing configuration, or starting a larger development workflow.
 
 ## Workflow
 
-Follow these steps. Skip or compress steps that clearly don't apply, but be explicit when you do.
+Adapt this workflow to the task. For a narrow edit, work from the existing design and check affected
+connections; do not restart discovery or require another outline approval.
 
-### Step 1 — Understand the change and gather inputs
+### 1. Establish the problem and the core solution
 
-Before writing, establish: What problem does this solve? Who is the reviewer? What is the blast radius
-(link level L0–L3, is it on the security/critical path)? Is it a new feature, a refactor, or a fix?
-If the user already has a PRD or the change spans known systems, pull those in. Ask only the questions
-you genuinely cannot infer — reviewers hate a doc that asks *them* for context.
+Use the supplied material and relevant repository or document evidence to identify:
+- The current problem, intended outcome, audience, and scope of change.
+- A one-sentence proposed solution and the few decisions that determine its behavior.
+- One concrete example that traverses the main flow, including the relevant changes and failures.
 
-### Step 2 — Choose the section set
+Trace where the inputs come from, who owns the state, how the target or version is selected, and what
+happens when a step fails. For a configuration-driven service, discovery, loading, use, updates, and
+withdrawal may be useful checkpoints; use only those relevant to the change.
 
-Read `references/section-guide.md` for the full catalog of sections, what each is for, the
-completeness checks reviewers apply, and common traps. Then select the sections this specific change
-needs. The backbone is almost always:
+Resolve consequential gaps before treating the solution as settled. Ask only for missing information
+that cannot reasonably be inferred; continue independent work. Explain real alternatives for significant
+trade-offs, without inventing options merely to populate a comparison table.
 
-**Background & Goals → Detailed Design (options + chosen design) → Interfaces → Storage & Cache →
-Exception Handling → Security → Monitoring → Capacity → Risk Control (FG kill-switch) →
-Compatibility → Performance Impact → Testing → Milestones → Rollout → Review Records**
+### 2. Organize around reader questions
 
-Mandatory-by-default for any server change that touches real traffic: **Interfaces, Storage, Exception
-Handling, Security, Monitoring, Risk Control (kill-switch), Rollout.** Drop MG / 私有互通 / 容量 only
-when you can justify they don't apply.
+Read [section-guide.md](references/section-guide.md) when choosing or restructuring sections. Select a
+small set of questions the document must answer, then assign each section one primary responsibility.
+Follow the causal flow: problem and scope, solution overview, how it works, then verification and rollout.
+Rename, merge, or expand sections to fit the actual design.
 
-### Step 3 — Draft with the readability rules
+For a new draft, [template.md](references/template.md) is an optional starting point, not a checklist to
+fill. An inapplicable concern normally needs no public placeholder; explain exclusions only when a
+required template or a plausible reviewer misunderstanding calls for it.
 
-Write the content following `references/writing-style.md`. The short version:
+### 3. Draft at the right depth
 
-- **Lead with the answer.** Start each section with the conclusion, then support it. Reviewers scan.
-- **One idea per paragraph; short paragraphs.** Break walls of text.
-- **Use tables for anything comparative** — option comparisons, interface fields, capacity estimates,
-  traffic/rate-limit configs. Tables are scannable; prose is not.
-- **Use a diagram for any non-trivial flow or architecture.** A sequence/flow/architecture diagram
-  replaces three confusing paragraphs. See the diagram guidance below.
-- **Number your options and state the decision explicitly.** "We chose Option 2 because …" — never
-  make the reader guess which one won.
-- **Bold the load-bearing sentences** — the decision, the risk, the kill-switch. Reviewers should be
-  able to catch the critical points from the bold text alone.
-- **Quantify goals and impact.** Attach metrics, QPS, latency, storage/day, blast radius.
+Read [writing-style.md](references/writing-style.md) for drafting or readability work. Lead with the
+conclusion and the main flow. Define easily confused concepts and their relationship before relying on
+them. Prefer a focused diagram when it reduces explanation; place details where the reader needs them.
 
-### Step 4 — Self-review against the checklist
+Use one primary explanation for a concept, contract, or failure rule. Annotated schema, field tables,
+and examples have different purposes; avoid repeating the same field reference in all three.
 
-Before handing off, run `references/review-checklist.md` against the draft. This is the same lens a
-reviewer uses. Fix gaps, or explicitly note "not applicable because …". Flag anything that needs a
-human decision (e.g., a real FG name, a capacity sign-off, a security conclusion) as a clearly marked
-**【待填写】 / TODO** so it isn't silently forgotten.
+### 4. Revise by replacing and consolidating
 
-### Step 5 — Produce the output
+After a change, follow its dependencies through definitions, examples, diagrams, affected sections, and
+references. Replace obsolete explanations, merge duplicates, and repair numbering and links. Do not
+turn each conversation answer into a new paragraph or chapter. A local edit needs an affected-area check;
+a changed core design needs a broader consistency pass.
 
-Default to a **Feishu doc** (via the `lark-doc` skill) unless the user asks otherwise, because these
-designs live and get reviewed in Feishu. When creating the Feishu doc:
+Keep unresolved decisions separate from the explanation of the chosen design. Retain only open items
+that affect implementation, compatibility, validation, or release; mark their consequence and next step.
 
-- Use real headings (H1/H2/H3) so the outline/TOC is navigable — this is a big readability win.
-- Render flows/architecture as **Mermaid/PlantUML code blocks** (Feishu turns them into editable
-  whiteboards); use the `lark-whiteboard` skill for complex architecture diagrams. Never paste a
-  screenshot or generated image in place of a diagram.
-- Use native tables for comparisons and field definitions.
-- Put callouts around the decision and the kill-switch so they stand out.
+### 5. Review comprehension and deliver
 
-If the user wants a local file (Markdown), produce clean GitHub-flavored Markdown with the same
-structure. Match the output language to the user's language.
+Use the applicable checks in [review-checklist.md](references/review-checklist.md). First ask whether a
+reader can restate the solution and walk the example; then inspect completeness. Fix missing reasoning
+and confusing structure, rather than adding a section solely to tick a box.
 
-## Diagrams — when and which
+Match the user's destination and operation. For a new document with no specified destination, prefer
+Feishu when available. For an existing document, preserve its location and relevant user annotations.
+Use the current `lark-doc` skill for document operations and the relevant whiteboard skill when needed;
+follow their supported representations instead of assuming fenced diagram code becomes a whiteboard.
+Use native headings and tables, and verify the rendered diagrams and the final affected content.
 
-A design without a picture of its main flow is usually harder to review than it needs to be. Reach for:
-
-- **Sequence diagram** — for request/response flows, multi-service calls, MG cross-region paths.
-- **Flowchart** — for decision logic, state handling, exception branches.
-- **Architecture / component diagram** — for how services, storage, and queues fit together (complex
-  ones → `lark-whiteboard`).
-- **ER-style table** — for data model relationships.
-
-Keep each diagram focused on one thing. A diagram that tries to show everything shows nothing.
-
-## References
-
-- `references/section-guide.md` — Every section, its purpose, completeness checks, and traps. **Read
-  this before choosing the section set.**
-- `references/writing-style.md` — Concrete readability techniques with before/after examples.
-- `references/review-checklist.md` — The pre-handoff checklist; also usable standalone to critique an
-  existing draft.
-- `references/template.md` — A ready-to-fill skeleton with section prompts, aligned to the internal
-  技术方案 template. Copy it as a starting point.
+Report what changed and any material unresolved issue. Keep the internal checklist and discarded outline
+out of the deliverable unless the user requests them.
