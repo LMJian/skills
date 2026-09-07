@@ -1,0 +1,4 @@
+interface:
+  display_name: "存量逻辑调研"
+  short_description: "在方案设计前扫描存量代码、历史契约、兼容约束与知识缺口"
+  default_prompt: "Use $brownfield-recon to investigate the existing logic and produce an evidence-backed baseline before design."
