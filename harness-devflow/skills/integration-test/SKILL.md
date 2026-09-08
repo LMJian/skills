@@ -1,0 +1,16 @@
+---
+name: integration-test
+description: "Run project-selected integration or end-to-end checks and classify failures using the approved scenarios."
+---
+
+# Integration verification
+
+Read [the runtime contract](../flow/references/runtime.md). Enter `integration` at its position in the selected route. Local suites run before push by default. Set `integration_position: after_push` only when the suite needs the pushed version or remote preview; this requires a remote endpoint.
+
+Map selected scenarios, or intake acceptance and planned verification when no test-design stage exists, to executable integration tests using the project's runner. The target may be local processes, containers, a preview environment or a specified test system. Keep setup within scope and secrets in existing stores.
+
+Run all configured integration checks via `run-check <name>`. Read logs and classify failures as product behavior, test defect, environment/data, or unknown. Fix causes supported by evidence; never weaken assertions to manufacture a pass.
+
+Product or test code fixes require a commit, `reopen review`, fresh checks and the task's selected downstream sequence again. A changed design or acceptance criterion reopens the corresponding earlier stage. Environment-only failures may be retried after actual repair. Stop at the configured retry budget or a decision outside the task.
+
+Complete with test artifacts and actual receipt IDs. When integration testing is genuinely inapplicable, obtain/retain the user's decision and record a concrete skip reason; unavailable infrastructure is not proof of inapplicability.

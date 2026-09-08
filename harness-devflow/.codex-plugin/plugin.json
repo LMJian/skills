@@ -1,0 +1,32 @@
+{
+  "name": "harness-devflow",
+  "version": "0.3.1",
+  "description": "Task-sized development harness with selectable profiles, delivery endpoints, optional worktrees and durable evidence.",
+  "author": {
+    "name": "Harness Devflow contributors"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Harness Devflow",
+    "shortDescription": "从需求到交付的通用 AI 研发工作流",
+    "longDescription": "按任务选择研发流程与交付终点，内置存量调研和服务端设计 Skills；专业能力按需接入，来源与产物纳入证据，保留真实验证和恢复机制。",
+    "developerName": "Harness Devflow contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "启动一个通用 Harness 研发流程",
+      "查看当前研发流程并继续",
+      "审查当前变更并运行配置的验证"
+    ]
+  },
+  "keywords": [
+    "harness",
+    "development",
+    "workflow",
+    "verification",
+    "git"
+  ]
+}

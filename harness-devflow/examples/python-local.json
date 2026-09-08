@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "base_ref": "main",
+  "workflow": {"profile": "standard", "target": "local", "isolation": "auto"},
+  "checks": {
+    "unit": {"argv": ["python3", "-m", "unittest", "discover", "-s", "tests"], "timeout_seconds": 300},
+    "integration": {"argv": ["python3", "-m", "unittest", "discover", "-s", "tests/integration"], "timeout_seconds": 600}
+  },
+  "stage_checks": {"review": ["unit"], "integration": ["integration"]},
+  "adapters": {}
+}

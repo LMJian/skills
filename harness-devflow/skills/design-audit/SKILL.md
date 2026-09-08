@@ -1,0 +1,16 @@
+---
+name: design-audit
+description: "Review selected module designs for requirement coverage, cross-module consistency, feasibility and operational risks."
+---
+
+# Design audit
+
+Read [the runtime contract](../flow/references/runtime.md) and [review criteria](../../references/review-criteria.md). Enter `design_audit` and read intake plus every design artifact.
+
+Use [capability handoff](../../references/capabilities.md): `prepare-capability design_audit --reason ...`. Backend auto uses the bundled server-tech-design in **review** mode. Read its request and pinned skill, submit its findings with `complete-capability`, and convert the actual findings to the Harness severity/report contract. Builtin uses the checks below. Draft and audit are separate invocations even if they use the same provider; a draft's self-check is not automatically the stage audit.
+
+Use provider findings plus focused correctness/robustness checks. Concentrate the Harness audit on acceptance coverage, cross-module field/contract agreement, dependencies and unresolved blockers. Reuse the baseline and design's evidence, tracing only unsupported or changed assumptions. Use independent reviewers only when available and authorized; otherwise review inline. Do not repeat the provider's complete checklist as another public document.
+
+Write actionable findings with severity `blocker`, `warning` or `suggestion`, evidence anchors, the affected module and a proposed correction. A blocker means the design cannot meet an acceptance criterion or creates a concrete unacceptable failure. Avoid elevating stylistic preferences.
+
+For accepted bounded corrections, reopen design, amend the affected artifacts, and rerun downstream audit. Ask only for unresolved product/architecture decisions or authority beyond the task. Stop after the configured attempt budget if the findings do not converge. Complete with an explicit findings array, including `[]` for a clean audit. Unresolved blockers cannot pass.

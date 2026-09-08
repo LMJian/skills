@@ -1,0 +1,16 @@
+---
+name: release
+description: "Review release readiness, record explicit approval and optionally execute a configured deployment with concrete evidence."
+---
+
+# Release readiness and deployment
+
+Read [the runtime contract](../flow/references/runtime.md), [review criteria](../../references/review-criteria.md), and [adapter contract](../../references/adapters.md) when deploying.
+
+Release and deploy run only for a deployed endpoint. Local/PR/merged endpoints exclude both. At `release`, assemble evidence for verification, rollback, observability and risks. Use `details.checklist` entries with status `pass` or `not_applicable` and a concrete explanation. Apply migrations, capacity, secrets, compatibility and rollout controls where relevant. The selected PR must have been observed merged.
+
+Write a concrete release packet. Request approval with `request-approval release --report ...`; show destination/version, test results and rollback plan. Record the user's actual acceptance using `approve release --actor ... --note ...`. This readiness approval and an authorization to execute deployment are distinct unless the user's wording includes both.
+
+At `deploy`, run the configured adapter with the existing execution authorization. It must deploy the approved version, wait for the real job outcome and return a deployment identifier. Verify health through actual project checks. A submission ID alone is not proof of success. If the user removes deployment from scope, change the endpoint with `configure-flow`; do not mark a skipped deployment as a deployed deliverable.
+
+Complete `deploy` with its successful receipt and evidence. On failure preserve logs and follow the applicable rollback/repair decision; do not silently redeploy indefinitely. Follow status afterward: capture knowledge only when selected, otherwise finish at the verified deployment.

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "base_ref": "main",
+  "workflow": {"profile": "standard", "target": "local", "isolation": "auto"},
+  "checks": {
+    "lint": {"argv": ["npm", "run", "lint"], "timeout_seconds": 300},
+    "test": {"argv": ["npm", "test", "--", "--run"], "timeout_seconds": 300},
+    "integration": {"argv": ["npm", "run", "test:integration"], "timeout_seconds": 600}
+  },
+  "stage_checks": {"review": ["lint", "test"], "integration": ["integration"]},
+  "adapters": {}
+}

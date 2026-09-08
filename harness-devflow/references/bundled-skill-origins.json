@@ -1,0 +1,19 @@
+{
+  "source": "User-supplied local skill packages, copied for portable distribution",
+  "copied_at": "2026-09-08",
+  "original_files": {
+    "brownfield-recon": {
+      "SKILL.md": "e46a48e06cf384f8573c3327d050df6156c80cf0cf0a50561e27355c64d60703",
+      "references/report-contract.md": "d85605f0a76b5f36ba3aa198aded5ed9c8621c8214b0b06038fc813eccb77e5a",
+      "references/search-playbook.md": "68d4399282d71f2316d5f073d1130e08c285ee9a6d53ab035ce58a2134ea6453",
+      "scripts/collect_evidence.py": "c6e7cdbfdf36eda56e24c84b4008c0357757e94ad3bb9eb1442d7203915f05cf"
+    },
+    "server-tech-design": {
+      "SKILL.md": "50893463c7ab2d01767e082c41f7ab5a570f7ea13be49f5677e3ee4e622b23d7",
+      "references/review-checklist.md": "46b2e2b43fbca69089c174caa7ae397b4d18b7b97c7218d16c2a321e5a430075",
+      "references/template.md": "e4a9e161184fb42a0e16faa21d617e49e69a3b4081bd7689e824d7de1acc215b",
+      "references/section-guide.md": "150a3fc34c4f8bcd852c12e441bd6c9a510a547a2535ccfc144c7bdff3cb3455",
+      "references/writing-style.md": "b88c0c2e75c1600d5876f798aa471c7240cb73dba8abde7fc8ed5aaf6b4e6778"
+    }
+  }
+}

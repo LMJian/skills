@@ -1,0 +1,16 @@
+---
+name: design
+description: "Develop module technical designs and explicit interface changes from accepted requirements before implementation."
+---
+
+# Technical design
+
+Read [the runtime contract](../flow/references/runtime.md). Enter `design` when selected; reuse intake and its recon baseline. Read code only to resolve missing, changed or consequential assumptions. Optional local knowledge can supplement those facts.
+
+Use [capability handoff](../../references/capabilities.md): `prepare-capability design --reason ...`. Backend auto selects bundled [server-tech-design](../server-tech-design/SKILL.md); other domains use the builtin method below unless configured otherwise. For a professional provider, read its request and pinned skill, draft the local design, and run `complete-capability design --report ...`. Builtin means continue below without recursively invoking this wrapper.
+
+Design modules in dependency order. Cover interface contracts, persistence and invariants, data lifecycle, main/error paths, idempotency and concurrency when relevant, compatibility, alternatives and their tradeoffs. Tie decisions to acceptance IDs. Document rollout, observability and rollback proportionally to the actual change. Include capacity assessment when new fanout or downstream load makes it material.
+
+Use a cohesive shared design with module sections, or separate module documents when that helps review. `details.designs` maps every module ID to a listed artifact; several modules may point to the same document. Include interface changes when applicable. Preserve the professional design's structure instead of wrapping it in another duplicate technical proposal. Resolve material decisions while preserving prior approvals.
+
+Complete `design` and follow status. A design correction uses `reopen design --reason ...` to invalidate selected downstream work. Worktree creation and implementation belong to implement; detailed task planning belongs to plan.

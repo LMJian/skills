@@ -1,0 +1,16 @@
+---
+name: monitor
+description: "Observe a real code review request, classify CI and review feedback, and manage an explicitly requested follow-up scheduler."
+---
+
+# Review request monitoring
+
+Read [the runtime contract](../flow/references/runtime.md) and [adapter contract](../../references/adapters.md). Enter `monitor` after an actual PR/MR receipt exists, only for merged/deployed endpoints. Local and PR endpoints exclude monitoring automatically.
+
+Run the read adapter once. It must return observed state and any available CI/review signals for the recorded request and commit. Open or closed-unmerged requests cannot complete this stage. A merged request can complete it using its adapter receipt and a summary artifact.
+
+Classify feedback: reproducible code/test defect, environment failure, design/product decision, non-actionable suggestion. Fix authorized bounded defects, commit and reopen review; rerun the normal downstream sequence. Draft a response only when useful, and send comments/messages only with explicit user authorization. Never auto-merge or force-push.
+
+If the user requests ongoing monitoring, use the host's real scheduler if available and record its returned handle with `record-monitor --provider ... --handle ...`. Keep the same owning checkout/task. The saved prompt invokes this skill, inspects actual state and stays quiet unless there is meaningful change, completion, failure or required user action. Choose an appropriate interval (15 minutes is a reasonable default). CLI-only hosts can use an explicitly configured CI/webhook scheduler or manual one-shot runs; never claim a scheduler exists when it was not created.
+
+Cancel the actual scheduled job when merged, closed, aborted, no longer selected, or blocked on a user decision. Recording/deleting a state handle alone does not cancel a scheduler. On merge follow status: a merged endpoint needs no release approval; deployed continues to release. On closure report the outcome and let the user choose the next action.
