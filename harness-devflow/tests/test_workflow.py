@@ -61,7 +61,7 @@ class RepoCase(unittest.TestCase):
         config["checks"] = {"unit": {"argv": [sys.executable, "-m", "unittest", "discover", "-s", "tests"]}}
         config["stage_checks"] = {"review": ["unit"], "integration": ["unit"]}
         config["adapters"] = adapters or {}
-        config["workflow"] = {"profile": "standard", "target": "local", "isolation": "worktree",
+        config["workflow"] = {"profile": "standard", "target": "local", "isolation": "worktree", "assistance": "autonomous",
                               "stages": {"design_approval": True, "interfaces": True}}
         atomic_json(path, config)
 
@@ -73,7 +73,7 @@ class RepoCase(unittest.TestCase):
         self.counter += 1
         prefix = f".harness/runs/example/artifacts/{self.counter:03d}-{stage}"
         artifact = self.write(prefix + ".md", f"# {stage}\nEvidence for the reusable capability.\n")
-        data = {"schema_version": 1, "stage": stage, "status": "pass", "summary": f"Completed {stage}",
+        data = {"schema_version": 2, "stage": stage, "status": "pass", "summary": f"Completed {stage}",
                 "artifacts": [str(artifact)], "findings": [], **extra}
         path = self.root / (prefix + "-report.json")
         atomic_json(path, data)
@@ -331,7 +331,7 @@ class ExecutionTests(RepoCase):
     def test_cli_fails_with_structured_error_instead_of_traceback(self):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            result = main(["--repo", str(self.root), "--task", "example", "enter", "review"])
+            result = main(["--repo", str(self.root), "--task", "example", "run-check", "unit"])
         self.assertEqual(result, 2)
         self.assertEqual(json.loads(err.getvalue())["status"], "blocked")
 
@@ -389,10 +389,10 @@ class ExecutionTests(RepoCase):
                               "child_pid": process.pid})
         atomic_json(self.flow.path, state)
         with self.assertRaisesRegex(HarnessError, "still alive"):
-            runner.abandon(self.flow, "interrupted", "Inspected logs")
+            runner.reconcile(self.flow, "interrupted", "Inspected logs")
         state["runs"][0]["owner_pid"] = process.pid
         atomic_json(self.flow.path, state)
-        result = runner.abandon(self.flow, "interrupted", "Confirmed both processes exited and no external effects")
+        result = runner.reconcile(self.flow, "interrupted", "Confirmed both processes exited and no external effects")
         self.assertEqual(result["status"], "failed")
 
 
@@ -414,7 +414,7 @@ class ContractTests(unittest.TestCase):
 
     def test_shell_string_configuration_is_rejected(self):
         with self.assertRaises(HarnessError):
-            validate_config({"schema_version": 1, "checks": {"unit": {"argv": "echo pass; true"}}})
+            validate_config({"schema_version": 2, "checks": {"unit": {"argv": "echo pass; true"}}})
 
     def test_adapter_result_is_strict(self):
         with self.assertRaises(HarnessError):

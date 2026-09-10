@@ -1,24 +1,52 @@
 ---
 name: implement
-description: "Execute planned tasks in the owning checkout or isolated worktrees, verify module behavior and integrate dependency waves."
+description: "Implement planned module tasks with guided checkpoints or autonomous execution, verify actual behavior and integrate dependency waves."
 ---
 
 # Module implementation
 
-Read [the runtime contract](../flow/references/runtime.md). Enter `implement`. Read intake, concrete planned tasks and any selected designs/scenarios. Use `execution_mode` from state; a separate worktree is not required for a single module in auto/checkout mode.
+Read [the runtime contract](../flow/references/runtime.md). Run `next` and read the current task,
+acceptance, check commands and upstream artifacts. Use the returned working directory; workflow
+commands always point to the owning repository and task ID.
 
-For language/framework details, use a relevant project-provided Skill when available. Resolve its location from project instructions relative to the repository (for example `.harness/skills/<name>/SKILL.md`), and cite the method in the module artifact; do not require a personal installation. This is implementation guidance, not another capability slot or stage. Harness still owns task IDs, command receipts, module completion and merging.
+## Prepare and implement
 
-For each module in the current wave:
+1. Run `prepare-module MODULE`. For builtin execution, edit the returned `worktree`. For an
+   `awaiting_host` request, use the authorized host tool at the exact requested base SHA and
+   `attach-worktree MODULE --path ...`. The core checks repository identity, base and ownership.
+2. Follow the recorded task IDs, expected behavior and verification method. Preserve existing
+   user changes. Use relevant project methods and environment tools when available.
+3. In **guided** mode, implement the next task, run a configured check with `--module MODULE`,
+   save the observed behavior/results in an artifact, and run:
 
-1. Run `prepare-module <id>` from the owning checkout. Use the returned `worktree` path for code edits: in checkout mode this is the owning repository itself. Keep workflow calls pointed at that repository and task ID.
-2. Follow the task IDs and verification plan already recorded in `plan`. Resolve setup through the project's environment. If the task plan materially changes, reopen plan rather than claiming unplanned work completed the original tasks.
-3. Implement and test the behavior. Use focused tests and the language's established workflow; run failing tests first when demonstrating a bug or meaningful new behavior. Preserve unrelated changes. Commit the module changes before final verification.
-4. For each required review check, run `run-check <name> --module <id>`. Commands run in the prepared checkout/worktree and record actual results. A failed or stale receipt cannot verify the module.
-5. Produce a module completion report with `module`, `status`, `summary`, `completed_tasks` (all planned task IDs), `acceptance`, `artifacts` and `checks`; run `complete-module <id> --report ...`.
+   ```text
+   checkpoint --module MODULE --step TASK_ID --summary 'Observed implemented behavior' --check RECEIPT_ID --artifact PATH
+   ```
 
-In checkout mode, completing the module records it as integrated; do not run `merge-wave`. In worktree mode, run `merge-wave` after every module in the wave verifies. Resolve actual merge conflicts using both intended behaviors, commit the resolved merge, and retry. Never use blanket ours/theirs resolution. The next wave branches from the updated owning branch.
+   Every planned task needs its own ordered checkpoint. Read `next` after each checkpoint.
+   A real failed, unrelated or stale check cannot satisfy it. These are programmatic checks,
+   not additional human approval gates.
+4. In **autonomous** mode, related tasks may be implemented together. Checkpoints remain
+   available; final task coverage and module checks are still required.
+5. Run all configured review checks for the final module code. In checkout mode, uncommitted
+   implementation can be verified locally. In worktree mode, commit module changes first so
+   the core can integrate the exact verified commit. Do not include unrelated user work in a commit.
+6. Write a result body containing `status`, `summary`, `completed_tasks`, `acceptance`, `artifacts`
+   and actual `checks` IDs. Use `submit-module MODULE --result FILE`; do not write envelope fields.
 
-Default to sequential execution. If the user or applicable instructions authorize parallel agents and the host supports them, dispatch independent modules up to configured `parallel_max`. Give each worker the plugin path, owning repository, task ID, module ID, worktree path and relevant artifacts. Wait only on successfully created workers. Worker failure does not count as completion.
+Checkout completion integrates the single module directly. In worktree mode, `merge-wave` runs
+after all members are verified. Resolve actual conflicts using the intended behaviors and commit
+the resolution before retrying. The next wave starts from the updated owning checkout.
 
-Once every wave is merged, write the overall implementation report and complete `implement`. Keep worktrees for inspection; cleanup is separate and never deletes unmerged work by default.
+## Execution and closure
+
+Honor the execution provider reported by `next`. Guided mode and hosts without delegation run
+serially. Autonomous mode may delegate independent modules only when the host exposes that
+capability and the user/project authorizes it. Each worker receives repository/task/module IDs,
+its working directory, task details and artifact references. Wait on actual returned worker handles;
+a missing worker or a failure never counts as completion.
+
+Use focused tests for each task and the full selected module checks at completion. If the task
+plan materially changes, reopen plan. Preserve historical checkpoint artifacts and command logs.
+When every module has integrated, submit an overall implementation result. Worktree cleanup is
+separate; the plugin does not delete host worktrees or unmerged changes.

@@ -9,7 +9,7 @@ import uuid
 
 from . import git as vcs
 from .model import (BUNDLED_CAPABILITIES, CAPABILITY_STAGES, HarnessError, digest,
-                    nonempty, now, require, strings)
+                    nonempty, now, require, strings, REPORT_SCHEMA)
 from .storage import file_lock, inside, read_json, snapshots, verify_snapshots, atomic_json
 
 
@@ -104,6 +104,8 @@ def prepare(workflow, slot: str, reason: str) -> dict:
         phase = "design" if state["workflow"]["enabled"]["design"] else "implementation"
         prior = [state["stages"][s]["report"] for s in stage_order(state)[:stage_order(state).index(stage)]
                  if state["stages"][s].get("report")]
+        inputs = list(dict.fromkeys(name for source in prior
+                                   for name in read_json(inside(workflow.root, source))["artifacts"]))
         source_evidence = snapshots(workflow.root, copied)
         source_digest = digest([{ "path": str(Path(p).relative_to(directory / "source")), "sha256": e["sha256"]}
                                 for p, e in zip(copied, source_evidence)])
@@ -111,6 +113,7 @@ def prepare(workflow, slot: str, reason: str) -> dict:
                    "operation": {"recon": "investigate", "design": "draft", "design_audit": "review", "review": "review_code"}[slot],
                    "goal": state["goal"], "domain": state["workflow"]["domain"], "repository": str(workflow.root),
                    "head": vcs.head(workflow.root), "base_sha": state["base_sha"], "input_reports": prior,
+                   "input_artifacts": inputs,
                    "readiness_phase": phase if slot == "recon" else None,
                    "output_directory": str(output), "format": "local_markdown",
                    "constraints": ["Use the requested local output directory; no implicit document publication or telemetry",
@@ -136,9 +139,9 @@ def complete(workflow, slot: str, source: str) -> dict:
         workflow.consistent(state)
         use = active_use(workflow, state, slot)
         require(use["status"] in {"prepared", "blocked"}, "Capability result already recorded; reopen the stage for a new attempt")
-        require(not any(r["status"] == "running" for r in state["runs"]), "A command is still running")
+        require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]), "A command is still running")
         report = read_json(inside(workflow.root, source))
-        require(report.get("schema_version") == 1 and report.get("capability_id") == use["id"] and
+        require(report.get("schema_version") == REPORT_SCHEMA and report.get("capability_id") == use["id"] and
                 report.get("slot") == slot, "Capability report does not match the prepared invocation")
         require(report.get("status") in {"pass", "blocked"}, "Capability status must be pass or blocked")
         nonempty(report.get("summary"), "capability.summary")

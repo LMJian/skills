@@ -9,7 +9,7 @@ from . import git as vcs
 from .model import (ADAPTER_STAGES, CODE_BOUND, GATES, OPTIONAL, STAGES, TERMINAL,
                     HarnessError, default_config, digest, identifier, module_waves,
                     nonempty, now, require, strings, validate_config, resolve_workflow, execution_hash,
-                    CAPABILITY_STAGES, workflow_defaults)
+                    CAPABILITY_STAGES, STATE_SCHEMA, REPORT_SCHEMA)
 from .storage import (atomic_json, file_lock, inside, read_json, snapshots, verify_snapshots)
 
 
@@ -34,7 +34,7 @@ def init_project(root: Path, base_ref: str | None = None) -> dict:
             ignore.write_text(existing.rstrip() + "\n" + "\n".join(additions) + "\n")
         atomic_json(path, config)
     return {"repository": str(root), "config": str(path), "created": True,
-            "next": "Configure review/integration commands and commit project configuration"}
+            "next": "Configure real review/integration commands, then start a task"}
 
 
 def current(state: dict) -> str | None:
@@ -42,8 +42,7 @@ def current(state: dict) -> str | None:
 
 
 def stage_order(state: dict) -> list[str]:
-    # Legacy states are inspected only to detect another active task on the branch.
-    return state.get("workflow", {}).get("order", list(state["stages"]))
+    return state["workflow"]["order"]
 
 
 def policy_stage(state: dict, stage: str) -> dict:
@@ -75,20 +74,17 @@ class Workflow:
     def config(self) -> dict:
         return validate_config(read_json(inside(self.root, ".harness/project.json")))
 
-    def load(self, *, active: bool = True, config_check: bool = True) -> dict:
+    def load(self, *, active: bool = True, config_check: bool = True, branch_check: bool = True) -> dict:
         state = read_json(self.path)
-        require(state.get("schema_version") == 2,
-                "Legacy task state: finish/export it with v0.1, then start a new v0.2 task; no state was modified")
+        require(state.get("schema_version") == STATE_SCHEMA,
+                "Unsupported task schema_version (expected 3); no automatic conversion")
+        require({"capability_uses", "git_common_dir", "initial_fingerprint", "initial_dirty", "config", "workflow"} <= set(state),
+                "Incomplete task state; required fields are missing")
         require(state.get("task") == self.task and state.get("repository") == str(self.root),
                 "State belongs to a different task or repository")
-        require(state.get("branch") == vcs.branch(self.root),
+        require(not branch_check or state.get("branch") == vcs.branch(self.root),
                 f"Use the owning checkout on branch {state.get('branch')}")
-        if "capability_uses" not in state:
-            # Additive v0.2 compatibility: reads normalize in memory; the next mutation persists it.
-            normalized = validate_config(state["config"])
-            state.update(config=normalized, config_hash=digest(normalized), capability_uses=[])
-            state["workflow"].setdefault("domain", "generic")
-            state["workflow"].setdefault("capabilities", workflow_defaults()["capabilities"])
+        require(state["git_common_dir"] == vcs.common_dir(self.root), "Task Git repository identity changed")
         if active:
             require(not state.get("aborted"), "Workflow was aborted; start a new task ID")
         if config_check:
@@ -107,7 +103,6 @@ class Workflow:
         nonempty(goal, "goal")
         config = self.config
         workflow = resolve_workflow(config, options)
-        require(vcs.clean(self.root), "Commit or stash changes before starting a workflow")
         branch = vcs.branch(self.root)
         base = base_ref or config["base_ref"] or vcs.head(self.root)
         nonempty(base, "base_ref")
@@ -116,15 +111,19 @@ class Workflow:
         require(vcs.is_ancestor(self.root, base_sha), "Base must be an ancestor of the current branch")
         # Serialize discovery plus creation, including distinct task IDs on the same branch.
         with file_lock(inside(self.root, ".harness/runs/start.lock")):
-            require(not self.path.exists(), f"Task {self.task} already exists; use status/resume")
+            require(not self.path.exists(), f"Task {self.task} already exists; use status/next")
             runs = inside(self.root, ".harness/runs")
             for path in runs.glob("*/state.json"):
                 other = read_json(inside(self.root, path))
+                require(other.get("schema_version") == STATE_SCHEMA,
+                        "Unsupported task state in .harness/runs; archive incompatible task data outside this directory")
                 require(other.get("branch") != branch or other.get("aborted") or current(other) is None,
                         f"Branch already has an active task: {other.get('task')}")
-            state = {"schema_version": 2, "task": self.task, "goal": goal,
+            state = {"schema_version": STATE_SCHEMA, "task": self.task, "goal": goal,
                      "repository": str(self.root), "branch": branch, "base_ref": base,
                      "base_sha": base_sha, "start_head": vcs.head(self.root),
+                     "git_common_dir": vcs.common_dir(self.root),
+                     "initial_fingerprint": vcs.fingerprint(self.root), "initial_dirty": not vcs.clean(self.root),
                      "config": config, "config_hash": digest(config), "execution_hash": execution_hash(config), "revision": 0,
                      "created_at": now(), "aborted": False,
                      "workflow": workflow, "workflow_overrides": options or {}, "stages": {},
@@ -155,6 +154,7 @@ class Workflow:
         require(not problems, f"Evidence is stale; reopen {problems[0]['stage'] if problems else ''}: {problems}")
 
     def summary(self, state: dict) -> dict:
+        from .hosts import resolve
         stage = current(state)
         problems = self.stale(state)
         try:
@@ -164,6 +164,7 @@ class Workflow:
             problems.append({"stage": "configuration", "reason": str(error)})
         return {"task": self.task, "branch": state["branch"], "revision": state["revision"],
                 "workflow": state["workflow"],
+                "execution": resolve(state["config"]["host"], state["workflow"]["assistance"]),
                 "active_stages": [s for s in stage_order(state) if state["workflow"]["enabled"][s]],
                 "current_stage": stage, "status": "aborted" if state["aborted"] else
                 ("stale" if problems else (state["stages"][stage]["status"] if stage else "complete")),
@@ -178,6 +179,25 @@ class Workflow:
     def status(self) -> dict:
         with file_lock(self.lock_path):
             return self.summary(self.load(active=False, config_check=False))
+
+    def bind_branch(self, reason: str) -> dict:
+        """Attach a newly named host branch without changing the verified code identity."""
+        nonempty(reason, "reason")
+        with file_lock(inside(self.root, ".harness/runs/start.lock")), file_lock(self.lock_path):
+            state = self.load(active=False, branch_check=False)
+            require(state["branch"] is None and vcs.branch(self.root), "Only a detached task can bind a newly named branch")
+            require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]), "Inspect active executions first")
+            self.consistent(state)
+            known = {state["initial_fingerprint"], *(s.get("fingerprint") for s in state["stages"].values())}
+            known.update(m.get("fingerprint") for m in state["modules"].values())
+            require(vcs.fingerprint(self.root) in known, "Record or verify current code before naming the branch")
+            state["branch"] = vcs.branch(self.root)
+            for module in state["modules"].values():
+                if module.get("worktree") == str(self.root):
+                    module["branch"] = state["branch"]
+            self.assert_sole_active(state)
+            self.save(state, "branch_bound", reason=reason, branch=state["branch"])
+            return self.summary(state)
 
     def enter(self, stage: str) -> dict:
         with file_lock(self.lock_path):
@@ -213,6 +233,7 @@ class Workflow:
                     f"Invalid or failed check receipt: {run_id}")
             require(receipt["fingerprint"] == code and receipt["config_hash"] == state["execution_hash"],
                     f"Stale check receipt: {run_id}")
+            verify_snapshots(self.root, receipt["evidence"])
             found.add(receipt["name"])
         require(set(names) <= found, f"Missing required checks: {sorted(set(names) - found)}")
 
@@ -224,6 +245,7 @@ class Workflow:
                 f"A successful {stage} adapter receipt is required")
         require(receipt["config_hash"] == state["execution_hash"] and
                 receipt["fingerprint"] == vcs.fingerprint(self.root), "Adapter receipt is stale")
+        verify_snapshots(self.root, receipt["evidence"])
         response = receipt["response"]
         if stage == "monitor":
             require(response.get("state") == "merged", "PR is not merged; keep monitoring or handle closure")
@@ -232,7 +254,7 @@ class Workflow:
     def validate_report(self, state: dict, stage: str, source: str) -> tuple[dict, list[dict]]:
         path = inside(self.root, source)
         report = read_json(path)
-        require(report.get("schema_version") == 1 and report.get("stage") == stage,
+        require(report.get("schema_version") == REPORT_SCHEMA and report.get("stage") == stage,
                 "Report schema_version or stage does not match")
         nonempty(report.get("summary"), "report.summary")
         require(report.get("status") == "pass", "Report must have status=pass before completion")
@@ -314,11 +336,15 @@ class Workflow:
             for module in state["modules"].values():
                 verify_snapshots(self.root, module["evidence"])
                 require(vcs.is_ancestor(self.root, module["head"]), "A merged module is missing from the owning branch")
+                if state["execution_mode"] == "checkout":
+                    require(vcs.fingerprint(self.root) == module["fingerprint"], "Module code changed after verification")
                 artifacts.extend(e["path"] for e in module["evidence"])
         elif stage in {"review", "integration"}:
             self.check_receipts(state, report, stage)
+            artifacts = [*artifacts, *(e["path"] for r in state["runs"] if r["id"] in report["checks"] for e in r["evidence"])]
         elif stage in ADAPTER_STAGES:
-            self.adapter_receipt(state, report, stage)
+            receipt = self.adapter_receipt(state, report, stage)
+            artifacts = [*artifacts, *(e["path"] for e in receipt["evidence"])]
         elif stage == "release":
             checks = details.get("checklist")
             require(isinstance(checks, dict), "release.details.checklist is required")
@@ -332,7 +358,7 @@ class Workflow:
         elif stage == "knowledge":
             nonempty(details.get("outcome"), "knowledge.details.outcome")
             require(details["outcome"] in {"draft", "no_changes"}, "Knowledge outcome must be draft or no_changes")
-        if stage in CODE_BOUND:
+        if stage in {"push", "pr", "monitor", "release", "deploy"}:
             require(vcs.clean(self.root), "Commit code changes before recording verification/delivery evidence")
         from .capabilities import stage_evidence
         evidence = snapshots(self.root, [str(path), *artifacts, *stage_evidence(self, state, stage, report)])
@@ -344,11 +370,11 @@ class Workflow:
             self.consistent(state)
             require(current(state) == stage and state["stages"][stage]["status"] == "running",
                     f"Enter the current stage ({current(state)}) before submitting its report")
-            require(not any(r["status"] == "running" for r in state["runs"]),
+            require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]),
                     "A command is still running; wait for its result before completing the stage")
             report, evidence = self.validate_report(state, stage, source)
             require(human_gate(state, stage, report) == request_approval,
-                    "Selected human gates require request-approval; other stages use complete")
+                    "Approval intent does not match the selected stage policy")
             from .capabilities import finish_builtin
             finish_builtin(self, state, stage, source, report)
             item = state["stages"][stage]
@@ -405,7 +431,7 @@ class Workflow:
             self.consistent(state)
             require(stage in OPTIONAL and current(state) == stage, "This stage cannot be skipped")
             require(state["stages"][stage]["status"] != "waiting_human", "Resolve the pending approval first")
-            require(not any(r["status"] == "running" for r in state["runs"]), "A command is still running")
+            require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]), "A command is still running")
             state["stages"][stage].update(status="skipped", reason=reason, ended_at=now())
             self.save(state, "skip", stage=stage, reason=reason)
             return self.summary(state)
@@ -426,7 +452,7 @@ class Workflow:
         order = stage_order(state)
         require(state["workflow"]["enabled"][stage], "Stage is excluded; use configure-flow to select it first")
         require(cur is None or order.index(stage) <= order.index(cur), "Cannot reopen a future stage")
-        require(not any(r["status"] == "running" for r in state["runs"]),
+        require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]),
                 "A command is in flight; inspect it before reopening stages")
         affected = order[order.index(stage):]
         state["history"].append({"at": now(), "reason": reason,
@@ -464,6 +490,8 @@ class Workflow:
                 return self.summary(state)
             previous = state["config"]
             affected = set()
+            if config["host"] != previous["host"]:
+                affected.add("plan" if state["modules"] else "review")
             if any(config[k] != previous[k] for k in ("checks", "stage_checks")):
                 affected.add("implement" if any(m["status"] != "merged" for m in state["modules"].values()) else "review")
             for stage in ADAPTER_STAGES:
@@ -479,9 +507,11 @@ class Workflow:
             return self.summary(state)
 
     def apply_policy(self, state: dict, workflow: dict, reason: str, affected: set | None = None) -> None:
-        require(not any(r["status"] == "running" for r in state["runs"]),
+        require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]),
                 "A command is in flight; inspect it before changing workflow configuration")
         old = state["workflow"]
+        require(old["assistance"] == workflow["assistance"] or not state["modules"],
+                "Choose assistance before implementation planning; an active task cannot weaken its checkpoints")
         changed = set(affected or ())
         changed.update(s for s in STAGES if old["enabled"][s] != workflow["enabled"][s])
         if old["order"] != workflow["order"] and workflow["enabled"]["integration"]:
@@ -542,6 +572,7 @@ class Workflow:
             if path == self.path:
                 continue
             other = read_json(inside(self.root, path))
+            require(other.get("schema_version") == STATE_SCHEMA, "Unsupported task state in .harness/runs")
             require(other.get("branch") != state["branch"] or other.get("aborted") or current(other) is None,
                     f"Branch already has an active task: {other.get('task')}")
 
@@ -549,7 +580,7 @@ class Workflow:
         nonempty(reason, "reason")
         with file_lock(self.lock_path):
             state = self.load(active=False, config_check=False)
-            require(not any(r["status"] == "running" for r in state["runs"]),
+            require(not any(r["status"] in {"running", "unresolved"} for r in state["runs"]),
                     "Wait for or inspect the running command before aborting")
             state["aborted"] = True
             self.save(state, "abort", reason=reason)
@@ -566,7 +597,7 @@ class Workflow:
             atomic_json(path, {"modules": modules, "waves": waves, "tasks": tasks,
                                "parallel_max": state["config"]["parallel_max"]})
             report = path.with_name(path.stem + "-report.json")
-            atomic_json(report, {"schema_version": 1, "stage": "plan", "status": "pass",
+            atomic_json(report, {"schema_version": REPORT_SCHEMA, "stage": "plan", "status": "pass",
                                  "summary": "Implementation tasks mapped to acceptance and dependency waves",
                                  "artifacts": [str(path)], "details": {"waves": waves, "tasks": tasks}})
         return self.complete("plan", str(report))

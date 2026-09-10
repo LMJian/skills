@@ -17,7 +17,7 @@ class ProfileTests(RepoCase):
     def setUp(self):
         super().setUp()
         config = read_json(self.root / ".harness/project.json")
-        config["workflow"] = {}
+        config["workflow"] = {"assistance": "autonomous"}
         config["stage_checks"]["integration"] = []
         atomic_json(self.root / ".harness/project.json", config)
         self.commit("Use default workflow policy")
@@ -220,7 +220,7 @@ class ProfileTests(RepoCase):
         result = json.loads(out.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(result["active_stages"], ["intake", "plan", "implement", "review", "knowledge"])
-        self.assertEqual(Workflow(self.root, "cli-task").load()["schema_version"], 2)
+        self.assertEqual(Workflow(self.root, "cli-task").load()["schema_version"], 3)
 
     def test_doctor_ignores_unselected_external_dependencies(self):
         path = self.root / ".harness/project.json"
@@ -248,12 +248,12 @@ class ProfileTests(RepoCase):
         with self.assertRaisesRegex(HarnessError, "active task"):
             self.flow.reopen("review", "Recheck old task")
 
-    def test_legacy_state_is_rejected_without_modifying_it(self):
+    def test_unsupported_state_is_rejected_without_modifying_it(self):
         state = self.flow.load()
         state["schema_version"] = 1
         atomic_json(self.flow.path, state)
         before = self.flow.path.read_bytes()
-        with self.assertRaisesRegex(HarnessError, "Legacy task state"):
+        with self.assertRaisesRegex(HarnessError, "Unsupported task schema_version"):
             self.flow.status()
         self.assertEqual(before, self.flow.path.read_bytes())
 

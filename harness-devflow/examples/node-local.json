@@ -1,12 +1,55 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "base_ref": "main",
-  "workflow": {"profile": "standard", "target": "local", "isolation": "auto"},
-  "checks": {
-    "lint": {"argv": ["npm", "run", "lint"], "timeout_seconds": 300},
-    "test": {"argv": ["npm", "test", "--", "--run"], "timeout_seconds": 300},
-    "integration": {"argv": ["npm", "run", "test:integration"], "timeout_seconds": 600}
+  "workflow": {
+    "profile": "standard",
+    "target": "local",
+    "isolation": "auto",
+    "assistance": "guided"
   },
-  "stage_checks": {"review": ["lint", "test"], "integration": ["integration"]},
-  "adapters": {}
+  "checks": {
+    "lint": {
+      "argv": [
+        "npm",
+        "run",
+        "lint"
+      ],
+      "timeout_seconds": 300
+    },
+    "test": {
+      "argv": [
+        "npm",
+        "test",
+        "--",
+        "--run"
+      ],
+      "timeout_seconds": 300
+    },
+    "integration": {
+      "argv": [
+        "npm",
+        "run",
+        "test:integration"
+      ],
+      "timeout_seconds": 600
+    }
+  },
+  "stage_checks": {
+    "review": [
+      "lint",
+      "test"
+    ],
+    "integration": [
+      "integration"
+    ]
+  },
+  "adapters": {},
+  "host": {
+    "name": "generic",
+    "available": [],
+    "command": {
+      "provider": "auto"
+    },
+    "worktree": "auto"
+  }
 }

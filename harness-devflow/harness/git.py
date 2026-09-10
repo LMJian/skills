@@ -26,10 +26,13 @@ def repo_root(path: Path) -> Path:
     return Path(git(path.resolve(), "rev-parse", "--show-toplevel")).resolve()
 
 
-def branch(root: Path) -> str:
+def branch(root: Path) -> str | None:
     value = git(root, "symbolic-ref", "--quiet", "--short", "HEAD", check=False).strip()
-    require(value, "A named Git branch is required (detached HEAD is unsupported)")
-    return value
+    return value or None
+
+
+def common_dir(root: Path) -> str:
+    return str((root / git(root, "rev-parse", "--git-common-dir")).resolve())
 
 
 def head(root: Path) -> str:

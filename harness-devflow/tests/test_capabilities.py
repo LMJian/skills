@@ -26,7 +26,7 @@ class CapabilityTests(RepoCase):
         artifact = directory / f"result-{self.counter}.md"
         artifact.write_text("# Observed baseline or proposed design\nThe existing value returns 1; the requested result is 2.\n")
         report = directory / f"result-{self.counter}.json"
-        data = {"schema_version": 1, "capability_id": use["id"], "slot": use["slot"], "status": status,
+        data = {"schema_version": 2, "capability_id": use["id"], "slot": use["slot"], "status": status,
                 "summary": "Investigated the fixture and documented the actual next-step evidence",
                 "artifacts": [str(artifact)], "details": details or {}, "findings": findings or [],
                 "tool_runs": tool_runs or []}
@@ -203,11 +203,11 @@ class CapabilityTests(RepoCase):
         self.flow.enter("intake")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = main(["--repo", str(self.root), "--task", "example", "prepare-capability", "recon", "--reason", "Read existing code"])
+            code = main(["--repo", str(self.root), "--task", "example", "use-skill", "recon", "--reason", "Read existing code"])
         self.assertEqual(code, 0)
         self.assertTrue(Path(json.loads(out.getvalue())["skill_path"]).is_file())
 
-    def test_v02_state_is_normalized_without_read_time_mutation(self):
+    def test_incomplete_state_is_rejected_without_normalization(self):
         state = self.flow.load()
         state.pop("capability_uses")
         for section in (state["workflow"], state["config"]["workflow"]):
@@ -216,10 +216,9 @@ class CapabilityTests(RepoCase):
         state["config_hash"] = digest(state["config"])
         atomic_json(self.flow.path, state)
         before = self.flow.path.read_bytes()
-        self.assertEqual(self.flow.status()["status"], "pending")
+        with self.assertRaisesRegex(HarnessError, "Incomplete task state"):
+            self.flow.status()
         self.assertEqual(before, self.flow.path.read_bytes())
-        self.flow.enter("intake")
-        self.assertIn("capability_uses", read_json(self.flow.path))
 
     def test_auto_missing_provider_falls_back_but_explicit_binding_does_not(self):
         isolated = self.flow.directory / "minimal-plugin"

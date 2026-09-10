@@ -1,20 +1,44 @@
 # Personal Skills
 
-面向 AI 辅助研发的可复用 Skills 与插件集合，覆盖存量代码调研、服务端技术方案，以及从需求到验证和交付的完整 Harness 开发流程。可以单独使用专业 Skill，也可以通过 `harness-devflow` 编排研发工作，保留任务状态、产物与真实验证记录。
+面向 AI 辅助研发的 Skills 与插件集合，覆盖存量代码调研、服务端技术方案，以及从需求到实现、验证和交付的完整开发流程。可以单独使用专业 Skill，也可以通过 `harness-devflow` 组织连续研发任务，保存上下文、产物与真实检查记录。
 
 ## 项目一览
 
 | 项目 | 形态 | 主要用途 |
 | --- | --- | --- |
-| [harness-devflow](harness-devflow/README.md) | 完整研发流程插件 | 按任务选择需求、设计、测试、计划、实现、审查和交付阶段，支持恢复与证据校验。 |
+| [harness-devflow](harness-devflow/README.md) | 完整研发流程插件 | 按任务选择流程深度，支持引导或自主执行、宿主适配、检查点验证和任务恢复。 |
 | [brownfield-recon](brownfield-recon/SKILL.md) | 独立 Skill | 调研已有代码、接口契约和失败路径，形成修改前的行为基线与保留／替换／移除判断。 |
 | [server-tech-design](server-tech-design/SKILL.md) | 独立 Skill | 编写、评审和优化服务端技术方案，讲清主流程、关键决策与相关工程约束。 |
 
+## 开始使用
+
+```bash
+git clone https://github.com/LMJian/skills.git
+```
+
+根据任务选择一个入口：
+
+- **完整研发任务**：加载或安装克隆目录中的 `harness-devflow/`，在目标代码仓库中调用 `flow`。插件已包含两个专业 Skills 及其资源。
+- **聚焦调研或设计**：单独加载 `brownfield-recon/` 或 `server-tech-design/`，也可以让 Agent 阅读对应的 `SKILL.md`。
+
+在 Codex 安装插件后，可用 `$harness-devflow:flow` 启动；Claude Code 可通过 `claude --plugin-dir /absolute/path/skills/harness-devflow` 加载，再调用 `/harness-devflow:flow`。具体接入、项目初始化和命令配置见 [插件使用说明](harness-devflow/README.md#获取与使用)。
+
+首次使用完整流程时，需要在目标仓库的 `.harness/project.json` 中配置该项目实际使用的检查命令；代码托管、接口生成和部署工具按交付需要接入。独立 Skills 按各自说明使用，不需要初始化 Harness 项目。
+
 ## harness-devflow：通用 Harness 开发流程
 
-当前版本为 **0.3.1**，支持 Codex 和 Claude Code 接入。运行时依赖 **Python 3.10+ 与 Git**，负责阶段编排、产物校验和任务恢复；具体研发工作由 Agent 按 Skills 执行，检查命令使用项目自己的工具链。
+当前版本为 **1.0.0**，支持 Codex、Claude Code 及能读取 Skills、执行命令的其他 AI 编码宿主。运行时依赖 **Python 3.10+ 与 Git**，提供通用流程核心、宿主适配与内置后备执行；具体研发工作由 Agent 按 Skills 完成，检查命令使用项目自己的工具链。
 
-插件包含 **14 个流程入口与 2 个专业 Skills**，共 16 个 Skills；流程阶段目录也有 16 项，运行时根据任务配置生成实际路线，需求、计划、实现和审查验证是核心阶段。
+插件包含 **14 个流程 Skills 与 2 个专业 Skills**，共 16 个 Skills。运行时从阶段目录中选择本次任务需要的路线；需求、计划、实现和审查验证是核心阶段。[完整阶段与 Skills 职责](harness-devflow/README.md#16-个-skills)见插件文档。
+
+以下配置分别选择，可以按任务组合：
+
+| 配置 | 选择 | 作用 |
+| --- | --- | --- |
+| 流程深度 `profile` | `light` / `standard` / `release` | 决定需要哪些设计、审查和确认阶段，默认 `standard` |
+| 交付终点 `target` | `local` / `pr` / `merged` / `deployed` | 决定完成到本地验证、评审请求、合并还是部署 |
+| 执行引导 `assistance` | `guided` / `autonomous` | 决定逐任务检查点或连续执行，默认 `guided` |
+| 宿主能力 `host` | 当前实际可用的工具与适配器 | 决定使用宿主能力还是内置执行，默认使用内置能力 |
 
 | 流程配置 | 默认开发流程 | 默认交付终点 |
 | --- | --- | --- |
@@ -24,18 +48,25 @@
 
 开发深度与交付终点独立选择：`local` 在本地验证后完成，`pr` 在创建评审请求后完成，`merged` 等待合并，`deployed` 完成发布确认和部署验证。接口更新、集成测试、知识归档按需启用；单模块默认使用当前分支，多模块可通过 worktree 按依赖批次实现与合并。
 
-阶段推进需要实际产物与检查记录，代码或已引用产物变化会使相关证据失效。插件保留阶段状态、调用来源和失败历史，支持中断恢复、重开阶段与有界重试。
+`guided` 引导执行按计划逐个完成可验证的小任务，并记录真实检查点，适合需要明确步骤和更强过程约束的任务。`autonomous` 自主执行允许连续实现和有序批量提交，两种方式共用验收与交付门禁。模式由项目和用户选择，不按模型或厂商名称自动判断。
+
+宿主提供可用能力时，可显式接入命令桥接器、工作树或委派工具；缺少这些能力时，使用内置命令执行、Git worktree 和串行流程。持续观察可接入宿主调度器；没有调度器时，在当前会话检查或下次恢复任务。具体能力契约见 [宿主接入说明](harness-devflow/references/hosts.md)。
+
+支持 detached HEAD 和已有未提交修改的本地任务。阶段推进需要实际产物与检查记录，代码或已引用产物变化会使相关证据失效。插件保留阶段状态、调用来源和失败历史，支持中断恢复、重开阶段与有界重试；也可导出任务包，让其他宿主在同一工作区中接续处理。
 
 需求、设计和验证记录默认保存在本地。测试、代码评审、接口更新及部署通过项目配置的命令或适配器执行。
 
 插件加载后，在 Codex 中可这样请求：
 
 ```text
-$harness-devflow:flow 实现服务端导出功能，使用标准流程，先完成本地实现与验证。
+$harness-devflow:flow 实现服务端导出功能，使用标准流程和引导执行，完成到本地验证。
+$harness-devflow:flow 修复这个边界条件，使用轻量流程和自主执行，完成到本地验证。
 $harness-devflow:flow 查看当前任务状态并继续。
 ```
 
 完整阶段、Skills、宿主接入和配置说明见 [插件 README](harness-devflow/README.md)；专业能力的输入、产物及报告转换见 [能力接入契约](harness-devflow/references/capabilities.md)。
+
+1.0.0 已通过 **102 项行为测试**，覆盖内置执行、宿主适配契约、工作树、检查点、证据失效和任务恢复。插件清单、16 个 Skills 和发行目录校验通过；测试环境与覆盖范围见 [验证记录](harness-devflow/docs/validation.md)。这些测试验证流程和运行时行为，不代表不同模型已达到相同的编码质量。
 
 ## brownfield-recon：存量逻辑调研
 
@@ -83,7 +114,7 @@ $server-tech-design 根据需求和现有代码写一份本地 Markdown 技术�
 
 Harness 已在 `harness-devflow/skills/` 内包含两个专业 Skill 及必要资源，无需再安装根目录的独立版本。存量调研在 intake 内按需调用；服务端设计与设计审查使用包内 `server-tech-design`，其他领域保留通用设计路径。
 
-## 目录与获取
+## 目录与分享
 
 ```text
 .
@@ -95,7 +126,7 @@ Harness 已在 `harness-devflow/skills/` 内包含两个专业 Skill 及必要�
 
 克隆本仓库后，按需使用对应目录：
 
-- 完整开发流程：使用 `harness-devflow/`，按 [插件接入说明](harness-devflow/README.md#使用方式) 加载或安装。
+- 完整开发流程：使用 `harness-devflow/`，按 [插件接入说明](harness-devflow/README.md#获取与使用) 加载或安装。
 - 独立调研或设计：将 `brownfield-recon/` 或 `server-tech-design/` 完整目录放入所用宿主的 Skills 目录，也可在任务中指定其 `SKILL.md` 路径使用。
 
 分享时可以提供本仓库链接或复制所需的完整目录。复制插件时保留 `.codex-plugin/`、`.claude-plugin/` 等隐藏目录；复制 Skill 时保留配套的 `references/`、`scripts/` 等资源。

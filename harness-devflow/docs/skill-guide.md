@@ -4,14 +4,14 @@
 
 | 流程 Skill | 职责 | 输入与完成条件 |
 | --- | --- | --- |
-| [flow](../skills/flow/SKILL.md) | 选择流程、路由、恢复和按需设计确认 | 根据领域和逻辑能力名选择方法，记录来源；读取当前状态并进入下一阶段。 |
+| [flow](../skills/flow/SKILL.md) | 选择流程、路由、恢复和按需设计确认 | 根据领域和逻辑能力名选择方法，记录来源；通过 next 获取具体任务；支持引导执行、自主执行和跨宿主交接。 |
 | [intake](../skills/intake/SKILL.md) | 明确需求、验收与模块边界 | 按需调用 brownfield-recon，引用修改前基线，形成需求与模块依赖报告。 |
 | [design](../skills/design/SKILL.md) | 编写技术方案 | backend 使用包内 server-tech-design，其他领域默认通用设计；方案覆盖各模块，也可跨模块共享。 |
 | [design-audit](../skills/design-audit/SKILL.md) | 领域审查与跨模块检查 | 独立审查方案的验收覆盖和契约一致性，发现纳入主报告，解决阻断项后推进。 |
 | [test-design](../skills/test-design/SKILL.md) | 设计测试场景与验收覆盖 | 复用调研和设计场景并分配稳定 ID，补齐缺口；运行时校验验收覆盖。 |
 | [interfaces](../skills/interfaces/SKILL.md) | 更新独立契约和生成产物 | 按需执行接口或生成工具适配器，验证实际结果；普通接口编码纳入 implement。 |
 | [plan](../skills/plan/SKILL.md) | 规划任务、验证方法与依赖批次 | 将具体任务映射到验收标准，记录验证方法与模块依赖。 |
-| [implement](../skills/implement/SKILL.md) | 实现、隔离、验证和模块合并 | 按计划任务 ID 执行，可使用项目提供的语言或框架 Skill；提交真实检查记录和模块完成报告。 |
+| [implement](../skills/implement/SKILL.md) | 实现、隔离、验证和模块合并 | 按计划任务 ID 执行，可使用项目提供的语言或框架 Skill；引导模式逐任务记录检查点；两种模式都提交真实检查记录并验证模块。 |
 | [review](../skills/review/SKILL.md) | 代码审查与检查修复 | 支持项目审查能力；发现纳入主报告，检查记录绑定当前代码版本。 |
 | [integration-test](../skills/integration-test/SKILL.md) | 执行集成验证并分析失败 | 按上游场景或轻量验收映射执行，区分产品、测试、环境与未知失败。 |
 | [delivery](../skills/delivery/SKILL.md) | 推送代码和创建评审请求 | 按交付终点执行 push/PR，记录适配器返回的实际结果。 |

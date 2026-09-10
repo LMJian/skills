@@ -17,6 +17,10 @@ GATES = {"design_approval", "release", "knowledge"}
 OPTIONAL = {"interfaces", "integration", "knowledge"}
 CORE = {"intake", "plan", "implement", "review"}
 PROFILES = ("light", "standard", "release")
+ASSISTANCE = ("guided", "autonomous")
+CONFIG_SCHEMA = 2
+STATE_SCHEMA = 3
+REPORT_SCHEMA = 2
 TARGETS = ("local", "pr", "merged", "deployed")
 SELECTABLE = {"design", "design_audit", "test_design", "design_approval", "interfaces", "integration", "knowledge"}
 CAPABILITY_STAGES = {"recon": "intake", "design": "design", "design_audit": "design_audit", "review": "review"}
@@ -46,7 +50,7 @@ def digest(value: Any) -> str:
 
 
 def execution_hash(config: dict) -> str:
-    return digest({key: config[key] for key in ("checks", "stage_checks", "adapters")})
+    return digest({key: config[key] for key in ("checks", "stage_checks", "adapters", "host")})
 
 
 def identifier(value: str) -> str:
@@ -69,8 +73,9 @@ def strings(value: Any, field: str, *, empty: bool = False) -> list[str]:
 
 
 def default_config() -> dict:
+    from .hosts import defaults as host_defaults
     return {
-        "schema_version": 1,
+        "schema_version": CONFIG_SCHEMA,
         "base_ref": None,
         "max_attempts": 3,
         "parallel_max": 4,
@@ -80,11 +85,12 @@ def default_config() -> dict:
         "stage_checks": {"review": [], "integration": []},
         "adapters": {},
         "workflow": workflow_defaults(),
+        "host": host_defaults(),
     }
 
 
 def workflow_defaults() -> dict:
-    return {"profile": "standard", "target": None, "isolation": "auto",
+    return {"profile": "standard", "target": None, "isolation": "auto", "assistance": "guided",
             "integration_position": "before_push", "knowledge_approval": False, "stages": {},
             "domain": "generic", "capabilities": {slot: "auto" for slot in CAPABILITY_STAGES}}
 
@@ -94,6 +100,7 @@ def workflow_options(value: Any) -> dict:
     require(set(value) <= set(workflow_defaults()), "Unknown workflow option")
     options = {**workflow_defaults(), **value}
     require(options["profile"] in PROFILES, "Unknown workflow profile")
+    require(options["assistance"] in ASSISTANCE, "Unknown assistance mode")
     require(options["target"] is None or options["target"] in TARGETS, "Unknown delivery target")
     require(isinstance(options["isolation"], str) and options["isolation"] in {"auto", "checkout", "worktree"}, "Unknown isolation mode")
     require(isinstance(options["integration_position"], str) and options["integration_position"] in {"before_push", "after_push"}, "Unknown integration position")
@@ -154,8 +161,8 @@ def validate_command(spec: Any, label: str, *, adapter: bool = False) -> None:
 
 
 def validate_config(data: Any) -> dict:
-    require(isinstance(data, dict) and data.get("schema_version") == 1,
-            "Unsupported project configuration schema_version (expected 1)")
+    require(isinstance(data, dict) and data.get("schema_version") == CONFIG_SCHEMA,
+            "Unsupported project configuration schema_version (expected 2); no automatic conversion")
     require(not (set(data) - set(default_config())), "Unknown project configuration key")
     config = {**default_config(), **data}
     if config["base_ref"] is not None:
@@ -177,6 +184,8 @@ def validate_config(data: Any) -> dict:
         require(stage in ADAPTER_STAGES, f"Unsupported adapter stage: {stage}")
         validate_command(spec, f"adapters.{stage}", adapter=True)
     config["workflow"] = workflow_options(config["workflow"])
+    from .hosts import validate as validate_host
+    config["host"] = validate_host(config["host"])
     resolve_workflow(config)
     return config
 

@@ -50,7 +50,7 @@ class AdapterTests(RepoCase):
         self.at_interfaces()
         receipt = runner.run(self.flow, "adapter", "interfaces")
         self.assertTrue(receipt["timed_out"])
-        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["status"], "unresolved")
         self.assertIn("starting", Path(receipt["stdout"]).read_text())
         self.assertLess(receipt["duration_seconds"], 10)
 

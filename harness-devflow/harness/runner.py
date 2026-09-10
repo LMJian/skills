@@ -4,29 +4,18 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import signal
-import subprocess
 import time
 import uuid
 
 from . import git as vcs
+from . import executors
+from .hosts import module_path, resolve
 from .engine import Workflow, current
 from .model import HarnessError, digest, nonempty, now, require
-from .storage import atomic_json, file_lock, inside
+from .storage import atomic_json, file_lock, inside, snapshots
 
 
 MAX_RESPONSE_BYTES = 1024 * 1024
-
-
-def terminate(process: subprocess.Popen) -> None:
-    if os.name == "posix":
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    else:
-        process.kill()
-    process.wait()
 
 
 def validate_response(response: object, stage: str) -> dict:
@@ -51,6 +40,8 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
     with file_lock(workflow.lock_path):
         state = workflow.load()
         workflow.consistent(state)
+        require(not any(r["status"] == "unresolved" for r in state["runs"]),
+                "An execution outcome is unresolved; reconcile it before starting another command")
         stage = current(state)
         require(stage and state["stages"][stage]["status"] == "running", "Enter a stage before running commands")
         capability_use = None
@@ -81,11 +72,11 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
             require(stage == "implement" and module in state["modules"], "Unknown implementation module")
             item = state["modules"][module]
             require(item["status"] == "running" and item.get("worktree"), "Prepare the module first")
-            cwd = inside(workflow.root, item["worktree"])
+            cwd = module_path(workflow, item)
             require(vcs.branch(cwd) == item["branch"], "Module worktree branch changed")
         elif stage == "implement":
             raise HarnessError("Implementation checks need --module to bind them to the prepared checkout/worktree")
-        running = [r for r in state["runs"] if r["status"] == "running" and
+        running = [r for r in state["runs"] if r["status"] in {"running", "unresolved"} and
                    (r.get("module") == module or kind == "adapter")]
         require(not running, "A command is already in flight; inspect/recover it instead of duplicating effects")
         if module is not None:
@@ -97,6 +88,7 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
                     r.get("module") == module and r["epoch"] == epoch and r["status"] == "failed"]
         require(len(failures) < state["config"]["max_attempts"],
                 "Command retry budget exhausted; inspect evidence and explicitly reopen the stage")
+        execution = resolve(state["config"]["host"], state["workflow"]["assistance"])
         run_id = uuid.uuid4().hex
         code = vcs.fingerprint(cwd)
         token = digest({"task": workflow.task, "stage": stage, "epoch": epoch,
@@ -107,6 +99,7 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
         directory.mkdir(parents=True)
         receipt = {"id": run_id, "kind": kind, "name": name, "stage": stage, "epoch": epoch,
                    "module": module, "status": "running", "fingerprint": code,
+                   "provider": execution["command"], "host": execution["host"],
                    "config_hash": state["execution_hash"], "started_at": now(), "owner_pid": os.getpid(),
                    "authorization": authorization, "idempotency_key": token,
                    "argv": spec["argv"], "cwd": str(cwd),
@@ -128,33 +121,32 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
     environment.update(HARNESS_REQUEST=str(directory / "request.json"),
                        HARNESS_TASK=workflow.task, HARNESS_STAGE=stage,
                        HARNESS_IDEMPOTENCY_KEY=token)
-    result = {"exit_code": None, "timed_out": False, "response": None, "error": None}
+    result = {"exit_code": None, "timed_out": False, "response": None, "error": None, "outcome": "unknown"}
     began = time.monotonic()
-    process = None
     replacements = {"{plugin_root}": str(Path(__file__).resolve().parent.parent),
                     "{repo}": str(workflow.root), "{artifact_dir}": str(workflow.directory / "artifacts"),
                     "{task}": workflow.task}
-    argv = []
-    for arg in spec["argv"]:
-        for token, value in replacements.items():
-            arg = arg.replace(token, value)
-        argv.append(arg)
+    def expand(arguments):
+        expanded = []
+        for arg in arguments:
+            for key, value in replacements.items():
+                arg = arg.replace(key, value)
+            expanded.append(arg)
+        return expanded
+
+    def on_spawn(pid):
+        with file_lock(workflow.lock_path):
+            latest = workflow.load()
+            next(r for r in latest["runs"] if r["id"] == run_id)["child_pid"] = pid
+            workflow.save(latest, "command_spawned", run_id=run_id)
+
     try:
-        with (directory / "stdout.log").open("wb") as out, (directory / "stderr.log").open("wb") as err:
-            process = subprocess.Popen(argv, cwd=cwd, env=environment, stdout=out, stderr=err,
-                                       stdin=subprocess.DEVNULL, start_new_session=(os.name == "posix"))
-            with file_lock(workflow.lock_path):
-                latest = workflow.load()
-                next(r for r in latest["runs"] if r["id"] == run_id)["child_pid"] = process.pid
-                workflow.save(latest, "command_spawned", run_id=run_id)
-            try:
-                result["exit_code"] = process.wait(timeout=spec.get("timeout_seconds", state["config"]["check_timeout_seconds"]))
-            except subprocess.TimeoutExpired:
-                terminate(process)
-                result.update(exit_code=process.returncode, timed_out=True, error="Command timed out")
-            except BaseException:
-                terminate(process)
-                raise
+        result.update(executors.execute(provider=execution["command"], host=state["config"]["host"],
+                      run_id=run_id, argv=expand(spec["argv"]), cwd=cwd, environment=environment,
+                      timeout=spec.get("timeout_seconds", state["config"]["check_timeout_seconds"]),
+                      directory=directory, on_spawn=on_spawn, expand=expand))
+        if result["timed_out"]:
+            result["error"] = "Command timed out; inspect external effects before retrying"
         if result["exit_code"] != 0 and not result["error"]:
             result["error"] = f"Command exited with code {result['exit_code']}"
         if kind == "adapter" and result["exit_code"] == 0:
@@ -172,9 +164,6 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
         result["error"] = str(error)
     except KeyboardInterrupt:
         result["error"] = "Interrupted; inspect command logs and external state before retrying"
-    finally:
-        if process is not None and process.poll() is None:
-            terminate(process)
     with file_lock(workflow.lock_path):
         latest = workflow.load(active=False, config_check=False)
         receipt = next(r for r in latest["runs"] if r["id"] == run_id)
@@ -189,17 +178,20 @@ def run(workflow: Workflow, kind: str, name: str, *, authorization: str | None =
         receipt["fingerprint"] = after
         if latest["config_hash"] != digest(workflow.config):
             receipt.update(status="failed", error="Configuration changed during command execution")
+        if result["outcome"] == "unknown" and (kind == "adapter" or execution["command"] == "native"):
+            receipt["status"] = "unresolved"
+        receipt["evidence"] = snapshots(workflow.root, [str(p) for p in directory.iterdir() if p.is_file() and p.stat().st_size])
         workflow.save(latest, "command_finished", run_id=run_id, status=receipt["status"])
         return receipt
 
 
-def abandon(workflow: Workflow, run_id: str, reason: str) -> dict:
+def reconcile(workflow: Workflow, run_id: str, reason: str) -> dict:
     nonempty(reason, "reason (include external reconciliation when applicable)")
     with file_lock(workflow.lock_path):
         state = workflow.load()
         receipt = next((r for r in state["runs"] if r["id"] == run_id), None)
-        require(receipt and receipt["status"] == "running", "No such interrupted running command")
-        for pid in (receipt.get("owner_pid"), receipt.get("child_pid")):
+        require(receipt and receipt["status"] in {"running", "unresolved"}, "No interrupted or unresolved command")
+        for pid in ((receipt.get("owner_pid"), receipt.get("child_pid")) if receipt["status"] == "running" else ()):
             if not pid:
                 continue
             try:
@@ -210,5 +202,5 @@ def abandon(workflow: Workflow, run_id: str, reason: str) -> dict:
                 raise HarnessError("Command process may still be alive; inspect it first")
             raise HarnessError(f"Process {pid} is still alive; do not abandon live commands")
         receipt.update(status="failed", error=reason, finished_at=now())
-        workflow.save(state, "command_abandoned", run_id=run_id, reason=reason)
+        workflow.save(state, "command_reconciled", run_id=run_id, reason=reason)
         return receipt

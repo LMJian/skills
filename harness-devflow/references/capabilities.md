@@ -45,11 +45,11 @@ apply backend guidance only to the relevant modules when explicitly selected.
 
 ## Prepare, perform, normalize
 
-After entering the relevant stage:
+After `next` starts the relevant stage:
 
 ```text
-prepare-capability recon --reason 'The persisted format and old callers are unclear'
-prepare-capability design --reason 'Design the new backend behavior'
+use-skill recon --reason 'The persisted format and old callers are unclear'
+use-skill design --reason 'Design the new backend behavior'
 ```
 
 The result identifies the provider, original source, source digest, pinned `skill_path`,
@@ -63,13 +63,10 @@ request supplies goal, domain, operation, input reports, code revision and local
 For a builtin choice, continue the current stage wrapper's method; do not recursively invoke
 it or submit an extra capability report. Its completion is recorded by the main stage report.
 
-Professional output is normalized into a small local result envelope by the stage wrapper:
+Submit a professional result body; the CLI supplies the invocation envelope:
 
 ```json
 {
-  "schema_version": 1,
-  "capability_id": "the-id-returned-by-prepare",
-  "slot": "recon",
   "status": "pass",
   "summary": "Describe the supported baseline and any phase-specific gaps",
   "artifacts": [".harness/runs/task/artifacts/capabilities/id/report.md"],
@@ -78,7 +75,7 @@ Professional output is normalized into a small local result envelope by the stag
 }
 ```
 
-Submit with `complete-capability <slot> --report <file>`. Recon readiness names the request's
+Submit with `record-skill <slot> --result <file>`. Recon readiness names the request's
 next phase (design or implementation), not a later release claim. `BLOCKED` pairs with
 `status: blocked`, prevents advancing the Harness stage, and can be resolved with a new result
 file that preserves the original evidence. Inventory is not readiness; inspect code/contracts.
@@ -127,7 +124,4 @@ duplicate suites. Planning, code review, integration and knowledge reuse those a
 Fresh code inspection remains necessary when a decision or current change depends on it.
 
 `configure-flow` changing a provider or relevant domain invalidates the affected stage and its
-downstream work while preserving previous invocation history. v0.2 schema-2 tasks receive
-additive capability defaults in memory; status does not rewrite them. The next normal mutation
-persists the added fields. No design approval is invented and prior work is not rerun solely
-because the plugin gained these defaults. v0.1 schema-1 compatibility remains unchanged.
+downstream work while preserving previous invocation history. Current state is validated without format conversion.

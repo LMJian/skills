@@ -1,11 +1,51 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "base_ref": "main",
-  "workflow": {"profile": "standard", "target": "local", "isolation": "auto"},
-  "checks": {
-    "unit": {"argv": ["python3", "-m", "unittest", "discover", "-s", "tests"], "timeout_seconds": 300},
-    "integration": {"argv": ["python3", "-m", "unittest", "discover", "-s", "tests/integration"], "timeout_seconds": 600}
+  "workflow": {
+    "profile": "standard",
+    "target": "local",
+    "isolation": "auto",
+    "assistance": "guided"
   },
-  "stage_checks": {"review": ["unit"], "integration": ["integration"]},
-  "adapters": {}
+  "checks": {
+    "unit": {
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "timeout_seconds": 300
+    },
+    "integration": {
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/integration"
+      ],
+      "timeout_seconds": 600
+    }
+  },
+  "stage_checks": {
+    "review": [
+      "unit"
+    ],
+    "integration": [
+      "integration"
+    ]
+  },
+  "adapters": {},
+  "host": {
+    "name": "generic",
+    "available": [],
+    "command": {
+      "provider": "auto"
+    },
+    "worktree": "auto"
+  }
 }

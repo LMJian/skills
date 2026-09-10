@@ -34,6 +34,7 @@ The project-level `workflow` object and per-task CLI flags use the same options:
 ```json
 {
   "profile": "standard",
+  "assistance": "guided",
   "target": "local",
   "domain": "backend",
   "capabilities": {"recon": "auto", "design": "auto", "design_audit": "auto", "review": "builtin"},
@@ -46,6 +47,7 @@ The project-level `workflow` object and per-task CLI flags use the same options:
 
 | Option | Values and behavior |
 | --- | --- |
+| assistance | `guided` (default) returns one task with verified checkpoints; `autonomous` allows continuous work and ordered batch submission, with identical final checks |
 | profile | `light`, `standard`, `release`; default standard |
 | target | `local`, `pr`, `merged`, `deployed`; omitted/null uses the profile default |
 | domain | `generic` (default), `backend`, `frontend`, `mixed`; backend selects bundled server design/audit methods |
@@ -83,18 +85,15 @@ a provider, or a domain affecting design/audit, invalidates that stage and its d
 No capability enables a disabled stage. See the [handoff contract](../../../references/capabilities.md)
 for bundle-relative resolution, preparation and result requirements.
 
-## v0.2 compatibility
+## Execution assistance and host capabilities
 
-v0.3 adds domain and capability defaults to schema-2 tasks in memory. Read-only status leaves
-the file untouched; a normal mutation persists the defaults. Existing evidence and approvals
-remain valid unless a relevant policy, code or artifact actually changes.
+Assistance is independent of task depth and delivery target. Guided mode is the default and
+runs implementation tasks sequentially with ordered verified checkpoints. Autonomous mode
+allows completing related tasks together. It permits parallel delegation only with actual host
+capability and authorization; otherwise modules remain serial. An active implementation cannot
+change assistance to weaken checkpoint requirements.
 
-## v0.1 compatibility
-
-Project configuration remains schema 1; older configs receive the new defaults for new tasks.
-Task state is schema 2 because ordering, gates and module plans changed. v0.2 rejects v0.1
-task state before writing it. Finish/export an active old task with the retained v0.1
-distribution, then start a new task ID. Do not hand-convert state or fabricate task maps.
-`design-approval` is no longer a separate Skill; `flow` handles that selected stage.
-The plan command now requires `--tasks`; completion reports use planned task IDs. The `stages`
-command returns a capability catalog, while task `status` supplies its actual selected route.
+Configure the separate project `host` object using [the host contract](../../../references/hosts.md).
+Native and builtin providers share quality rules. A host name never implies tool availability or
+model capability. Missing native support selects builtin execution before the operation begins.
+Permission denial, failed tests or uncertain effects never trigger automatic executor fallback.

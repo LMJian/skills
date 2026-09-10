@@ -1,59 +1,75 @@
 ---
 name: flow
-description: "Choose and run a task-sized development workflow with configurable delivery endpoints, durable evidence and optional design approval."
+description: "Run or resume a development task with guided checkpoints, optional autonomous execution, portable evidence and host capability fallback."
 ---
 
-# Harness development workflow
+# Development workflow
 
-Use this workflow when the user asks to orchestrate a feature through design, implementation, verification and delivery. A standalone explanation or an ordinary small edit does not by itself start a workflow.
+Use for a requested development workflow or an existing Harness task. A question about a
+workflow does not start one. Resolve the plugin root from this file's location; the consumer
+repository is the user's target checkout. Read [the runtime contract](references/runtime.md).
 
-Read [the runtime contract](references/runtime.md) before operating state. The plugin root is two directories above this skill's directory; resolve its absolute path from the skill location. The consumer repository is the user's target checkout, never the installed plugin directory.
+## Start or continue
 
-## Entry and configuration
+1. Read applicable project instructions. Establish the actual goal, acceptance scope, repository
+   and task ID. Keep the selected model and host permissions.
+2. Choose `light` for a focused change, `standard` for substantial design, and `release` for
+   formal design approval plus deployment. Choose the requested endpoint independently;
+   default to `local`. Preserve explicit project/user requirements.
+3. Use `guided` assistance by default. Use `autonomous` when the user or project selects it.
+   This changes task granularity, not quality gates. Model or vendor names do not determine
+   the mode. See [profiles](references/profiles.md).
+4. Inspect available host tools. Use builtin execution unless actual native capability or an
+   explicitly configured command bridge is available. Follow [host integration](../../references/hosts.md)
+   for native worktrees, command bridges, delegation and scheduling. Capability availability
+   is separate from authorization. Missing native support has a builtin or serial path.
+5. If needed, run `init` and configure real project checks and selected delivery adapters.
+   Inspect project scripts rather than inventing a passing check. Run `doctor` with the intended
+   profile and endpoint. A Git repository with an initial commit is required. Detached HEAD
+   and existing uncommitted changes are supported; preserve user changes.
+6. Start with `start --goal ... --profile ... --assistance ... --target ... --domain ...`.
+   For a started task, run `next`. Read its action, inputs and returned Skill path. That command
+   starts a pending stage and produces a concrete work packet. `status` is read-only.
+7. Execute the returned action and submit the actual result. Repeat `next` while authorized
+   work remains. Finish at the selected endpoint. An internal routing message is not delivery.
 
-1. Read the consumer's applicable AGENTS.md and project instructions. Determine the actual host and available tools; keep the current model and permissions.
-2. Identify the goal, target repository and stable task ID. Local text or Markdown is sufficient. Determine the relevant domain (`backend`, `frontend`, `mixed`, or `generic`) from the task and code; state the choice with the profile. Do not require a tracker, documentation/testing platform or a personal skill installation.
-3. Select scope from the actual request. Use `light` for a focused fix or small reversible change, `standard` for a feature needing design and scenario review, and `release` for a change needing formal design review and deployment. State your choice briefly; do not ask the user to choose routine configuration. Preserve explicit project/user requirements. See [profiles and endpoints](references/profiles.md).
-4. Select the delivery endpoint independently: `local`, `pr`, `merged`, or `deployed`. Default to local unless the task calls for a remote deliverable. A request to implement does not imply creating a PR or deploying. Enable interfaces, additional testing or knowledge only when applicable. Use `--enable design_approval` when a concrete unresolved architecture/risk decision or explicit project policy warrants it; routine designs do not need an extra approval step.
-5. The plugin bundles `brownfield-recon` and `server-tech-design`. Read [capability handoff](../../references/capabilities.md) when selecting a method. Auto uses recon only when needed and server design/review for backend tasks. `--capability SLOT=PROVIDER` selects a required method; `builtin` selects the generic fallback. Do not load another same-named skill from a personal directory. Custom methods belong in the consumer's `.harness/skills/<name>/`.
-6. Run `doctor` with the same profile, endpoint, domain and overrides intended for start. If configuration is absent, `init --base <verified-base-ref>` creates `.harness/project.json`. Set real checks and selected adapters; inspect existing scripts rather than inventing a passing command. Commit configuration as part of authorized setup. A Git repository, initial commit and clean named branch are required.
-7. Use a dedicated local feature branch unless the user explicitly requests the base branch. Run `start --goal <goal> --profile <profile> --target <endpoint> --domain <domain>` with applicable overrides. Read `active_stages`; only those stages run. `start` and `resume` return state; the agent performs the work.
+## Action handling
 
-## Routing
+- `execute_skill`: read the returned Skill and cited upstream artifacts. Do the work and use
+  `submit --result <body.json>`. The runtime creates the envelope and links actual check receipts.
+- `prepare_module`: run its command. Builtin execution returns the checkout; native execution
+  may return a worktree request. Follow that request and `attach-worktree` after creation.
+- `implement_task`: in guided mode complete only the next planned task, run a real check and
+  record `checkpoint`. In autonomous mode complete related tasks together, then verify the module.
+- `submit_module` / `merge_wave`: follow [implementation](../implement/SKILL.md).
+- `inspect_execution`: inspect process state, logs and external effects. Reconcile an uncertain
+  operation before retrying. Do not switch providers to evade a refusal or duplicate a side effect.
+- `repair_evidence`: reopen the identified affected stage, or synchronize an intentional config
+  change. Preserve prior artifacts. Never edit state fields to declare them fresh.
+- `approval`: present the existing concrete artifact and obtain the required actual decision,
+  respecting authorization already supplied. Record it with `approve`.
+- `diagnose`: inspect failures and retry budget; revise the plan or reopen with a specific reason.
+- `finished`: report delivered artifacts, verification and material remaining limitations.
 
-Read only the skill for the current stage, plus its linked contract. Invoke names as `harness-devflow:<skill>` when the host supports plugin skill discovery; otherwise read the same SKILL.md and execute inline.
+The returned Skill may be loaded by the host or read as Markdown directly. The plugin bundles
+`brownfield-recon` and `server-tech-design`; resolve those through package-relative paths and
+[professional handoff](../../references/capabilities.md). Do not require personal skill paths.
 
-| State stage | Skill |
-| --- | --- |
-| intake | intake |
-| design | design |
-| design_audit | design-audit |
-| test_design | test-design |
-| design_approval | flow (approval procedure below) |
-| interfaces | interfaces |
-| plan | plan |
-| implement | implement |
-| review | review |
-| push, pr | delivery |
-| integration | integration-test |
-| monitor | monitor |
-| release, deploy | release |
-| knowledge | knowledge |
+## Approval and recovery
 
-After each skill, reread `status` and continue while the current action is authorized and unblocked. Do not report an internal routing message as a completed user task. At a human gate, show the concrete artifacts and request the needed decision, respecting prior session authorization. At a failed command, diagnose the actual logs before retrying. Never edit stage statuses or synthesize receipts.
+For selected design approval or release, assemble a concrete packet and `submit` it. Runtime
+returns `waiting_human`; it does not invent an approval. `approve STAGE --actor ... --note ...`
+records an applicable real decision. Routine guided checkpoints never request human approval.
 
-## Selected design approval
+`reopen` preserves history and invalidates downstream evidence without reverting code or remote
+actions. `sync-config` accepts an intentional project change and invalidates affected work.
+`configure-flow` changes actual scope/endpoint, not a failed check's outcome. Choose assistance
+before planning; an active implementation cannot weaken its checkpoint requirements.
 
-Only when `design_approval` is selected, enter it and assemble a local packet linking requirements, designs and any selected audit/scenario artifacts. Show material decisions, interface changes and remaining risks. Run `request-approval design_approval --report ...` for this concrete packet. Record an actual applicable user decision with `approve design_approval --actor ... --note ...`; generic permission to implement is not approval of an unseen design. Revisions reopen the earliest affected stage. Local Markdown is sufficient; publishing elsewhere requires the user's authorization for that destination.
+`handoff --output <new-file>` records the project goal, next action and artifact references for
+another host in the same checkout. `export` produces a human-readable progress report. `abort`
+stops the task; separately cancel any real scheduler when authorized. Neither action deletes worktrees.
 
-## Recovery and control
-
-- `status`: show stage, missing evidence, pending decisions and module progress.
-- `resume`: inspect state and continue its current skill. A `waiting_human` state needs the user's decision; elapsed time is not approval.
-- `reopen <stage> --reason ...`: preserve history and invalidate that stage and everything downstream. Changed design goes back to design; code repairs after review go back to review.
-- `configure-flow ... --reason ...`: change the task's profile, endpoint, isolation or selected stages; inspect the resulting route and affected evidence. Extend a completed local task to PR/merged/deployed only when the user requests that next deliverable. Do not change scope merely to evade a failed check.
-- `sync-config --reason ...`: accept an intentional project configuration change. Command/policy changes invalidate affected work; operational limits alone do not reopen design approval. A new code/config commit still requires fresh code verification.
-- `abort --reason ...`: stop this run. Explicitly cancel any real scheduler whose handle was recorded. Preserve branches, worktrees, drafts and logs.
-- `export --output <new-path>`: write a portable Markdown progress/evidence report.
-
-Unselected stages are automatically excluded with a recorded policy reason. Selected interfaces, integration and knowledge can be skipped with a specific applicability reason. Missing credentials or failed checks are not proof of inapplicability. Delivery stages required by the chosen endpoint cannot be skipped. Finish when that endpoint and any selected knowledge capture are complete: a PR endpoint does not wait for merge, and local/PR/merged endpoints do not request release approval.
+Only interfaces, integration and knowledge may be skipped with an actual applicability reason.
+Missing credentials, failed checks or unavailable required infrastructure are blockers. Native
+capabilities and builtin fallbacks obey the same completion rules.

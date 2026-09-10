@@ -1,7 +1,7 @@
 {
   "name": "harness-devflow",
-  "version": "0.3.1",
-  "description": "Task-sized development harness with selectable profiles, delivery endpoints, optional worktrees and durable evidence.",
+  "version": "1.0.0",
+  "description": "Portable development harness with guided checkpoints, autonomous execution, host adapters and built-in fallback.",
   "author": {
     "name": "Harness Devflow contributors"
   },
